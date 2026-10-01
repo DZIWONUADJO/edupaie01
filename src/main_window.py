@@ -1,5 +1,6 @@
 import sys
 import os
+from decimal import Decimal
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QTableWidget, QTableWidgetItem, 
                              QPushButton, QLineEdit, QLabel, QMessageBox,
@@ -22,7 +23,7 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def format_montant(montant):
-        return f"{montant:,.0f} FCFA"
+        return f"{Decimal(str(montant)):,.2f} FCFA"
 
     def init_ui(self):
         main_widget = QWidget()
@@ -76,7 +77,7 @@ class MainWindow(QMainWindow):
         self.total_eleves_label.setText(f"Élèves : {len(eleves)}")
         self.total_du_label.setText(f"Total dû : {self.format_montant(total_du)}")
         self.total_paye_label.setText(f"Total payé : {self.format_montant(total_paye)}")
-        self.total_reste_label.setText(f"Reste : {self.format_montant(max(0, total_du - total_paye))}")
+        self.total_reste_label.setText(f"Reste : {self.format_montant(total_du - total_paye)}")
         
         self.table.setRowCount(0)
         for e in eleves:

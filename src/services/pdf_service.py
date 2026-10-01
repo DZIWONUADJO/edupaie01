@@ -1,4 +1,5 @@
 import os
+from decimal import Decimal
 
 class PDFService:
     @staticmethod
@@ -20,7 +21,7 @@ class PDFService:
         pdf.cell(0, 8, f"N° de Reçu : {recu_no}", ln=True)
         pdf.cell(0, 8, f"Élève : {eleve_nom} {eleve_prenom}", ln=True)
         pdf.cell(0, 8, f"Classe : {classe}", ln=True)
-        pdf.cell(0, 8, f"Montant Réglé : {montant:,} FCFA", ln=True)
+        pdf.cell(0, 8, f"Montant Réglé : {Decimal(str(montant)):,.2f} FCFA", ln=True)
         pdf.cell(0, 8, f"Mode de Règlement : {mode_p}", ln=True)
         
         pdf.output(filename)

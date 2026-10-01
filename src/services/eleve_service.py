@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from src.database.eleve_dao import EleveDAO
 from src.database.paiement_dao import PaiementDAO
 
@@ -8,12 +10,13 @@ class EleveService:
         resultat = []
         for e in eleves:
             e_id, mat, nom, prenom, classe, frais = e
-            total_paye = PaiementDAO.get_total_paye_par_eleve(e_id)
+            frais = Decimal(str(frais))
+            total_paye = Decimal(str(PaiementDAO.get_total_paye_par_eleve(e_id)))
             reste = frais - total_paye
-            statut = "Soldé" if reste <= 0 else ("En retard" if total_paye == 0 else "En cours")
+            statut = "Crédit" if reste < 0 else ("Soldé" if reste == 0 else ("En retard" if total_paye == 0 else "En cours"))
             resultat.append({
                 "id": e_id, "matricule": mat, "nom": nom, "prenom": prenom,
                 "classe": classe, "frais": frais, "paye": total_paye,
-                "reste": max(0, reste), "statut": statut
+                "reste": reste, "statut": statut
             })
         return resultat

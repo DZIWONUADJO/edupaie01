@@ -7,7 +7,9 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QPushButton, QLineEdit, QLabel, QMessageBox,
                              QDialog, QFormLayout, QComboBox, QDoubleSpinBox,
                              QDateEdit, QDialogButtonBox, QAbstractItemView)
-from PySide6.QtCore import QDate
+from PySide6.QtCore import QDate, QRect
+from PySide6.QtGui import QPainter, QFont
+from PySide6.QtPrintSupport import QPrinter, QPrintDialog
 from src.database.connection import init_db
 from src.database.eleve_dao import EleveDAO
 from src.database.paiement_dao import PaiementDAO
@@ -49,6 +51,14 @@ class MainWindow(QMainWindow):
         receipt_button = QPushButton("Générer la facture PDF")
         receipt_button.clicked.connect(self.generer_facture)
         search_layout.addWidget(receipt_button)
+
+        history_button = QPushButton("Historique des paiements")
+        history_button.clicked.connect(self.afficher_historique)
+        search_layout.addWidget(history_button)
+
+        print_button = QPushButton("Imprimer le reçu")
+        print_button.clicked.connect(self.imprimer_recu)
+        search_layout.addWidget(print_button)
         
         layout.addLayout(search_layout)
 
@@ -126,6 +136,82 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Génération impossible", f"Le reçu n'a pas été généré : {error}")
             return
         QMessageBox.information(self, "Facture générée", f"La facture PDF a été créée ici :\n{filename}")
+
+    def obtenir_eleve_selectionne(self):
+        selected_rows = self.table.selectionModel().selectedRows()
+        if not selected_rows:
+            QMessageBox.information(self, "Sélection nécessaire", "Sélectionnez une ligne élève.")
+            return None
+        eleve_id = int(self.table.item(selected_rows[0].row(), 0).text())
+        return next((item for item in EleveDAO.get_all() if item[0] == eleve_id), None)
+
+    def afficher_historique(self):
+        eleve = self.obtenir_eleve_selectionne()
+        if eleve is None:
+            QMessageBox.warning(self, "Élève introuvable", "L'élève sélectionné n'existe plus.")
+            return
+
+        paiements = PaiementDAO.get_by_eleve(eleve[0])
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"Historique - {eleve[2]} {eleve[3]}")
+        dialog.resize(650, 350)
+        layout = QVBoxLayout(dialog)
+        layout.addWidget(QLabel(f"Élève : {eleve[2]} {eleve[3]} | Matricule : {eleve[1]}"))
+
+        history_table = QTableWidget(0, 4)
+        history_table.setHorizontalHeaderLabels(["Date", "Montant", "Mode", "Référence"])
+        history_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        total = Decimal("0")
+        for paiement_id, montant, date_paiement, mode_paiement in paiements:
+            row = history_table.rowCount()
+            history_table.insertRow(row)
+            history_table.setItem(row, 0, QTableWidgetItem(date_paiement))
+            history_table.setItem(row, 1, QTableWidgetItem(self.format_montant(montant)))
+            history_table.setItem(row, 2, QTableWidgetItem(mode_paiement))
+            history_table.setItem(row, 3, QTableWidgetItem(f"PAY-{paiement_id:04d}"))
+            total += Decimal(str(montant))
+        layout.addWidget(history_table)
+        layout.addWidget(QLabel(f"Total payé : {self.format_montant(total)}"))
+        close_button = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        close_button.rejected.connect(dialog.reject)
+        close_button.accepted.connect(dialog.accept)
+        layout.addWidget(close_button)
+        dialog.exec()
+
+    def imprimer_recu(self):
+        eleve = self.obtenir_eleve_selectionne()
+        if eleve is None:
+            QMessageBox.warning(self, "Élève introuvable", "L'élève sélectionné n'existe plus.")
+            return
+        paiements = PaiementDAO.get_by_eleve(eleve[0])
+        if not paiements:
+            QMessageBox.information(self, "Aucun paiement", "Cet élève n'a aucun reçu à imprimer.")
+            return
+
+        paiement_id, montant, date_paiement, mode_paiement = paiements[0]
+        printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+        dialog = QPrintDialog(printer, self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        painter = QPainter(printer)
+        try:
+            painter.setFont(QFont("Arial", 16, QFont.Weight.Bold))
+            painter.drawText(QRect(500, 500, 7000, 500), "REÇU DE PAIEMENT - EDUPAIE")
+            painter.setFont(QFont("Arial", 11))
+            lines = [
+                f"Référence : PAY-{paiement_id:04d}",
+                f"Élève : {eleve[2]} {eleve[3]}",
+                f"Matricule : {eleve[1]}",
+                f"Classe : {eleve[4]}",
+                f"Montant réglé : {self.format_montant(montant)}",
+                f"Date : {date_paiement}",
+                f"Mode de paiement : {mode_paiement}",
+            ]
+            for index, line in enumerate(lines, start=2):
+                painter.drawText(700, 500 + index * 500, line)
+        finally:
+            painter.end()
 
     def ajouter_eleve(self):
         dialog = QDialog(self)

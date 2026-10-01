@@ -9,8 +9,8 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QDateEdit, QDialogButtonBox, QAbstractItemView,
                              QFrame, QGridLayout, QHeaderView, QButtonGroup,
                              QFileDialog)
-from PySide6.QtCore import QDate, QRect
-from PySide6.QtGui import QPainter, QFont, QFontDatabase
+from PySide6.QtCore import QDate, QRect, Qt
+from PySide6.QtGui import QPainter, QFont, QFontDatabase, QColor
 from PySide6.QtPrintSupport import QPrinter, QPrintDialog
 from src.database.connection import DB_PATH, init_db
 from src.database.backup import create_backup, restore_backup
@@ -37,6 +37,7 @@ class MainWindow(QMainWindow):
         QLineEdit:focus, QComboBox:focus, QDateEdit:focus, QDoubleSpinBox:focus { border: 1px solid #08784e; }
         QPushButton#primaryButton { background: #08784e; color: white; border: 1px solid #08784e; border-radius: 4px; padding: 9px 12px; font-weight: 600; }
         QPushButton#primaryButton:hover { background: #066540; }
+        QPushButton#primaryButton:pressed { background: #045333; }
         QPushButton#secondaryButton { background: #e9efeb; color: #33443a; border: 1px solid #dce5df; border-radius: 4px; padding: 8px 12px; }
         QPushButton#secondaryButton:hover { background: #dcebe2; color: #08784e; }
         QFrame#metricCard { background: white; border: 1px solid #e1e7e3; border-radius: 5px; }
@@ -110,7 +111,6 @@ class MainWindow(QMainWindow):
         dashboard_button = self.creer_bouton_menu("Vue d'ensemble", self.afficher_tous_les_eleves, checked=True)
         sidebar_layout.addWidget(dashboard_button)
         sidebar_layout.addWidget(self.creer_bouton_menu("Nouvel élève", self.ajouter_eleve))
-        sidebar_layout.addWidget(self.creer_bouton_menu("Nouveau paiement", self.ajouter_paiement))
 
         payment_heading = QLabel("PAIEMENTS")
         payment_heading.setObjectName("sidebarHeading")
@@ -140,15 +140,18 @@ class MainWindow(QMainWindow):
         title.setObjectName("pageTitle")
         title_row.addWidget(title)
         title_row.addStretch()
-        self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Rechercher un élève par nom...")
-        self.search_input.setFixedWidth(290)
-        self.search_input.textChanged.connect(self.charger_donnees)
-        title_row.addWidget(self.search_input)
-
+        new_payment_button = QPushButton("Nouveau paiement")
+        new_payment_button.setObjectName("primaryButton")
+        new_payment_button.clicked.connect(self.ajouter_paiement)
+        title_row.addWidget(new_payment_button)
         content_layout.addLayout(title_row)
 
         filter_row = QHBoxLayout()
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("Rechercher un élève...")
+        self.search_input.setFixedWidth(250)
+        self.search_input.textChanged.connect(self.charger_donnees)
+        filter_row.addWidget(self.search_input)
         class_label = QLabel("Classe")
         class_label.setObjectName("mutedText")
         filter_row.addWidget(class_label)
@@ -187,8 +190,8 @@ class MainWindow(QMainWindow):
         content_layout.addLayout(table_heading)
 
         self.table = QTableWidget()
-        self.table.setColumnCount(8)
-        self.table.setHorizontalHeaderLabels(["ID", "Matricule", "Nom", "Prénom", "Classe", "Dû", "Payé", "Reste"])
+        self.table.setColumnCount(9)
+        self.table.setHorizontalHeaderLabels(["ID", "Matricule", "Nom", "Prénom", "Classe", "Dû", "Payé", "Reste", "Statut"])
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -285,6 +288,18 @@ class MainWindow(QMainWindow):
             self.table.setItem(row, 5, QTableWidgetItem(self.format_montant(e["frais"])))
             self.table.setItem(row, 6, QTableWidgetItem(self.format_montant(e["paye"])))
             self.table.setItem(row, 7, QTableWidgetItem(self.format_montant(e["reste"])))
+            status_item = QTableWidgetItem(e["statut"])
+            status_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            status_colors = {
+                "En retard": ("#8a5700", "#fff1d2"),
+                "En cours": ("#245b86", "#e8f2fa"),
+                "Soldé": ("#08784e", "#e5f3eb"),
+                "Crédit": ("#176c70", "#e4f3f2"),
+            }
+            foreground, background = status_colors.get(e["statut"], ("#53645b", "#f1f4f2"))
+            status_item.setForeground(QColor(foreground))
+            status_item.setBackground(QColor(background))
+            self.table.setItem(row, 8, status_item)
 
     def sauvegarder_base(self):
         default_path = os.path.join(

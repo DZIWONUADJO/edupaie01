@@ -1,11 +1,12 @@
 import sys
 import os
 from decimal import Decimal
+from datetime import datetime
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QTableWidget, QTableWidgetItem, 
                              QPushButton, QLineEdit, QLabel, QMessageBox,
                              QDialog, QFormLayout, QComboBox, QDoubleSpinBox,
-                             QDateEdit, QDialogButtonBox)
+                             QDateEdit, QDialogButtonBox, QAbstractItemView)
 from PySide6.QtCore import QDate
 from src.database.connection import init_db
 from src.database.eleve_dao import EleveDAO
@@ -45,8 +46,8 @@ class MainWindow(QMainWindow):
         add_payment_button.clicked.connect(self.ajouter_paiement)
         search_layout.addWidget(add_payment_button)
 
-        receipt_button = QPushButton("Générer le reçu PDF")
-        receipt_button.clicked.connect(self.generer_recu)
+        receipt_button = QPushButton("Générer la facture PDF")
+        receipt_button.clicked.connect(self.generer_facture)
         search_layout.addWidget(receipt_button)
         
         layout.addLayout(search_layout)
@@ -64,6 +65,9 @@ class MainWindow(QMainWindow):
         self.table = QTableWidget()
         self.table.setColumnCount(8)
         self.table.setHorizontalHeaderLabels(["ID", "Matricule", "Nom", "Prénom", "Classe", "Dû", "Payé", "Reste"])
+        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.table.cellDoubleClicked.connect(lambda row, _column: self.generer_facture(row))
         layout.addWidget(self.table)
         
         self.setCentralWidget(main_widget)
@@ -94,29 +98,34 @@ class MainWindow(QMainWindow):
             self.table.setItem(row, 6, QTableWidgetItem(self.format_montant(e["paye"])))
             self.table.setItem(row, 7, QTableWidgetItem(self.format_montant(e["reste"])))
 
-    def generer_recu(self):
-        selected_rows = self.table.selectionModel().selectedRows()
-        if not selected_rows:
-            QMessageBox.information(self, "Sélection nécessaire", "Sélectionnez un élève pour générer son reçu.")
-            return
+    def generer_facture(self, row=None):
+        if row is None:
+            selected_rows = self.table.selectionModel().selectedRows()
+            if not selected_rows:
+                QMessageBox.information(self, "Sélection nécessaire", "Sélectionnez une ligne élève pour générer sa facture.")
+                return
+            row = selected_rows[0].row()
 
-        eleve_id = int(self.table.item(selected_rows[0].row(), 0).text())
+        eleve_id = int(self.table.item(row, 0).text())
+        donnees = next((item for item in EleveService.obtenir_liste_eleves_avec_solde() if item["id"] == eleve_id), None)
         eleve = next((item for item in EleveDAO.get_all() if item[0] == eleve_id), None)
-        paiements = PaiementDAO.get_by_eleve(eleve_id)
-        if eleve is None or not paiements:
-            QMessageBox.information(self, "Aucun paiement", "Cet élève n'a encore aucun paiement enregistré.")
+        if eleve is None or donnees is None:
+            QMessageBox.warning(self, "Élève introuvable", "L'élève sélectionné n'existe plus.")
             return
 
-        paiement_id, montant, date_paiement, mode_paiement = paiements[-1]
-        recu_no = f"REC-{date_paiement.replace('-', '')}-{paiement_id:04d}"
+        paiements = PaiementDAO.get_by_eleve(eleve_id)
+        dernier_paiement = paiements[0] if paiements else None
+        facture_no = f"FAC-{datetime.now().strftime('%Y%m%d-%H%M%S')}-{eleve_id:04d}"
         try:
-            filename = PDFService.generer_recu(
-                eleve[2], eleve[3], eleve[4], montant, mode_paiement, recu_no
+            filename = PDFService.generer_facture(
+                eleve[1], eleve[2], eleve[3], eleve[4],
+                donnees["frais"], donnees["paye"], donnees["reste"],
+                dernier_paiement, facture_no
             )
         except Exception as error:
             QMessageBox.critical(self, "Génération impossible", f"Le reçu n'a pas été généré : {error}")
             return
-        QMessageBox.information(self, "Reçu généré", f"Le reçu PDF a été créé ici :\n{filename}")
+        QMessageBox.information(self, "Facture générée", f"La facture PDF a été créée ici :\n{filename}")
 
     def ajouter_eleve(self):
         dialog = QDialog(self)

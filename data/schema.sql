@@ -1,20 +1,19 @@
 PRAGMA foreign_keys = ON;
 
-CREATE TABLE IF NOT EXISTS eleve (
-    id_eleve INTEGER PRIMARY KEY AUTOINCREMENT,
+CREATE TABLE IF NOT EXISTS eleves (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    matricule TEXT NOT NULL UNIQUE,
     nom TEXT NOT NULL,
     prenom TEXT NOT NULL,
-    date_naissance TEXT NOT NULL,
     classe TEXT NOT NULL,
-    annee_scolaire TEXT NOT NULL,
-    montant_total_du NUMERIC NOT NULL
+    frais_scolarite NUMERIC NOT NULL CHECK (frais_scolarite >= 0)
 );
 
-CREATE TABLE IF NOT EXISTS paiement (
-    id_paiement INTEGER PRIMARY KEY AUTOINCREMENT,
-    id_eleve INTEGER NOT NULL,
+CREATE TABLE IF NOT EXISTS paiements (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    eleve_id INTEGER NOT NULL,
+    montant NUMERIC NOT NULL CHECK (montant > 0),
     date_paiement TEXT NOT NULL,
-    montant_verse NUMERIC NOT NULL,
-    numero_recu TEXT NOT NULL UNIQUE,
-    FOREIGN KEY (id_eleve) REFERENCES eleve(id_eleve)
+    mode_paiement TEXT NOT NULL,
+    FOREIGN KEY (eleve_id) REFERENCES eleves(id) ON DELETE CASCADE
 );

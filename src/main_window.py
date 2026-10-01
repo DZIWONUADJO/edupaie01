@@ -6,23 +6,64 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QTableWidget, QTableWidgetItem, 
                              QPushButton, QLineEdit, QLabel, QMessageBox,
                              QDialog, QFormLayout, QComboBox, QDoubleSpinBox,
-                             QDateEdit, QDialogButtonBox, QAbstractItemView)
+                             QDateEdit, QDialogButtonBox, QAbstractItemView,
+                             QFrame, QGridLayout, QHeaderView, QButtonGroup,
+                             QFileDialog)
 from PySide6.QtCore import QDate, QRect
-from PySide6.QtGui import QPainter, QFont
+from PySide6.QtGui import QPainter, QFont, QFontDatabase
 from PySide6.QtPrintSupport import QPrinter, QPrintDialog
-from src.database.connection import init_db
+from src.database.connection import DB_PATH, init_db
+from src.database.backup import create_backup, restore_backup
 from src.database.eleve_dao import EleveDAO
 from src.database.paiement_dao import PaiementDAO
 from src.services.eleve_service import EleveService
 from src.services.pdf_service import PDFService
 
 class MainWindow(QMainWindow):
+    APP_STYLE = """
+        QWidget#appRoot { background: #f1f3f2; color: #26332d; font-family: "Segoe UI"; font-size: 10pt; }
+        QFrame#topBar { background: #08784e; }
+        QLabel#brand { color: white; font-size: 19pt; font-weight: 700; }
+        QLabel#topBarSubtitle { color: #d4eee2; font-size: 9pt; }
+        QFrame#sidebar { background: #ffffff; border-right: 1px solid #dce4df; }
+        QLabel#sidebarHeading { color: #7b8982; font-size: 8pt; font-weight: 700; padding: 12px 12px 5px; }
+        QPushButton#navButton { text-align: left; background: transparent; color: #48564f; border: 0; border-left: 3px solid transparent; padding: 10px 12px; border-radius: 0; }
+        QPushButton#navButton:hover { background: #edf6f1; color: #08784e; }
+        QPushButton#navButton:pressed, QPushButton#navButton:checked { background: #e5f2eb; color: #08784e; border-left: 3px solid #08784e; font-weight: 700; }
+        QLabel#pageTitle { color: #26332d; font-size: 19pt; font-weight: 650; }
+        QLabel#sectionTitle { color: #08784e; font-size: 12pt; font-weight: 700; }
+        QLabel#mutedText { color: #78867f; }
+        QLineEdit, QComboBox, QDateEdit, QDoubleSpinBox { background: white; border: 1px solid #d7e0db; border-radius: 4px; padding: 8px 10px; selection-background-color: #08784e; }
+        QLineEdit:focus, QComboBox:focus, QDateEdit:focus, QDoubleSpinBox:focus { border: 1px solid #08784e; }
+        QPushButton#primaryButton { background: #08784e; color: white; border: 1px solid #08784e; border-radius: 4px; padding: 9px 12px; font-weight: 600; }
+        QPushButton#primaryButton:hover { background: #066540; }
+        QPushButton#secondaryButton { background: #e9efeb; color: #33443a; border: 1px solid #dce5df; border-radius: 4px; padding: 8px 12px; }
+        QPushButton#secondaryButton:hover { background: #dcebe2; color: #08784e; }
+        QFrame#metricCard { background: white; border: 1px solid #e1e7e3; border-radius: 5px; }
+        QLabel#metricTitle { color: #708078; font-size: 9pt; }
+        QLabel#metricValue { color: #08784e; font-size: 15pt; font-weight: 700; }
+        QTableWidget { background: white; alternate-background-color: #f8faf9; border: 1px solid #e1e7e3; border-radius: 5px; gridline-color: #edf0ee; selection-background-color: #e4f2e9; selection-color: #174d35; }
+        QHeaderView::section { background: #f5f8f6; color: #53645b; border: 0; border-bottom: 1px solid #dce4df; padding: 10px 8px; font-weight: 700; }
+        QTableWidget::item { padding: 7px; border-bottom: 1px solid #eff2f0; }
+        QDialog, QMessageBox { background: #f7f9f8; }
+        QDialogButtonBox QPushButton, QMessageBox QPushButton { min-width: 80px; padding: 7px 12px; }
+    """
+
     def __init__(self):
         super().__init__()
+        self.charger_polices_systeme()
         self.setWindowTitle("EduPaie - Gestion des Frais Scolaires")
-        self.resize(900, 550)
+        self.resize(1180, 720)
+        self.setMinimumSize(900, 600)
+        self.setStyleSheet(self.APP_STYLE)
         self.init_ui()
         self.charger_donnees()
+
+    @staticmethod
+    def charger_polices_systeme():
+        for font_path in ("C:/Windows/Fonts/segoeui.ttf", "C:/Windows/Fonts/segoeuib.ttf"):
+            if os.path.exists(font_path):
+                QFontDatabase.addApplicationFont(font_path)
 
     @staticmethod
     def format_montant(montant):
@@ -30,72 +71,209 @@ class MainWindow(QMainWindow):
 
     def init_ui(self):
         main_widget = QWidget()
-        layout = QVBoxLayout(main_widget)
-        
-        # Barre de recherche
-        search_layout = QHBoxLayout()
+        main_widget.setObjectName("appRoot")
+        root_layout = QVBoxLayout(main_widget)
+        root_layout.setContentsMargins(0, 0, 0, 0)
+        root_layout.setSpacing(0)
+
+        top_bar = QFrame()
+        top_bar.setObjectName("topBar")
+        top_bar.setFixedHeight(62)
+        top_layout = QHBoxLayout(top_bar)
+        top_layout.setContentsMargins(24, 0, 24, 0)
+        brand = QLabel("EduPaie")
+        brand.setObjectName("brand")
+        top_layout.addWidget(brand)
+        top_layout.addStretch()
+        subtitle = QLabel("GESTION DES FRAIS SCOLAIRES")
+        subtitle.setObjectName("topBarSubtitle")
+        top_layout.addWidget(subtitle)
+        root_layout.addWidget(top_bar)
+
+        body = QWidget()
+        body_layout = QHBoxLayout(body)
+        body_layout.setContentsMargins(0, 0, 0, 0)
+        body_layout.setSpacing(0)
+
+        sidebar = QFrame()
+        sidebar.setObjectName("sidebar")
+        sidebar.setFixedWidth(205)
+        sidebar_layout = QVBoxLayout(sidebar)
+        sidebar_layout.setContentsMargins(0, 16, 0, 16)
+        sidebar_layout.setSpacing(3)
+        self.navigation_group = QButtonGroup(self)
+        self.navigation_group.setExclusive(True)
+        actions_heading = QLabel("ACTIONS")
+        actions_heading.setObjectName("sidebarHeading")
+        sidebar_layout.addWidget(actions_heading)
+
+        dashboard_button = self.creer_bouton_menu("Vue d'ensemble", self.afficher_tous_les_eleves, checked=True)
+        sidebar_layout.addWidget(dashboard_button)
+        sidebar_layout.addWidget(self.creer_bouton_menu("Nouvel élève", self.ajouter_eleve))
+        sidebar_layout.addWidget(self.creer_bouton_menu("Nouveau paiement", self.ajouter_paiement))
+
+        payment_heading = QLabel("PAIEMENTS")
+        payment_heading.setObjectName("sidebarHeading")
+        sidebar_layout.addWidget(payment_heading)
+        sidebar_layout.addWidget(self.creer_bouton_menu("Historique paiements", self.afficher_historique))
+        sidebar_layout.addWidget(self.creer_bouton_menu("Imprimer reçu", self.imprimer_recu))
+
+        documents_heading = QLabel("DOCUMENTS")
+        documents_heading.setObjectName("sidebarHeading")
+        sidebar_layout.addWidget(documents_heading)
+        sidebar_layout.addWidget(self.creer_bouton_menu("Facture PDF", self.generer_facture))
+        data_heading = QLabel("DONNÉES")
+        data_heading.setObjectName("sidebarHeading")
+        sidebar_layout.addWidget(data_heading)
+        sidebar_layout.addWidget(self.creer_bouton_menu("Sauvegarder", self.sauvegarder_base))
+        sidebar_layout.addWidget(self.creer_bouton_menu("Restaurer", self.restaurer_base))
+        sidebar_layout.addStretch()
+        body_layout.addWidget(sidebar)
+
+        content = QWidget()
+        content_layout = QVBoxLayout(content)
+        content_layout.setContentsMargins(26, 22, 26, 24)
+        content_layout.setSpacing(16)
+
+        title_row = QHBoxLayout()
+        title = QLabel("Vue d'ensemble")
+        title.setObjectName("pageTitle")
+        title_row.addWidget(title)
+        title_row.addStretch()
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Rechercher un élève par nom...")
+        self.search_input.setFixedWidth(290)
         self.search_input.textChanged.connect(self.charger_donnees)
-        search_layout.addWidget(QLabel("🔍 Recherche :"))
-        search_layout.addWidget(self.search_input)
+        title_row.addWidget(self.search_input)
 
-        add_student_button = QPushButton("Ajouter un élève")
-        add_student_button.clicked.connect(self.ajouter_eleve)
-        search_layout.addWidget(add_student_button)
+        content_layout.addLayout(title_row)
 
-        add_payment_button = QPushButton("Enregistrer un paiement")
-        add_payment_button.clicked.connect(self.ajouter_paiement)
-        search_layout.addWidget(add_payment_button)
+        filter_row = QHBoxLayout()
+        class_label = QLabel("Classe")
+        class_label.setObjectName("mutedText")
+        filter_row.addWidget(class_label)
+        self.class_filter = QComboBox()
+        self.class_filter.setFixedWidth(160)
+        self.class_filter.addItem("Toutes les classes", "")
+        self.class_filter.currentIndexChanged.connect(self.charger_donnees)
+        filter_row.addWidget(self.class_filter)
+        status_label = QLabel("Statut")
+        status_label.setObjectName("mutedText")
+        filter_row.addWidget(status_label)
+        self.status_filter = QComboBox()
+        self.status_filter.setFixedWidth(150)
+        self.status_filter.addItem("Tous les statuts", "")
+        for status in ("En retard", "En cours", "Soldé", "Crédit"):
+            self.status_filter.addItem(status, status)
+        self.status_filter.currentIndexChanged.connect(self.charger_donnees)
+        filter_row.addWidget(self.status_filter)
+        filter_row.addStretch()
+        content_layout.addLayout(filter_row)
 
-        receipt_button = QPushButton("Générer la facture PDF")
-        receipt_button.clicked.connect(self.generer_facture)
-        search_layout.addWidget(receipt_button)
+        metrics = QGridLayout()
+        metrics.setHorizontalSpacing(12)
+        metrics.setVerticalSpacing(12)
+        self.total_eleves_label = self.creer_carte_indicateur(metrics, 0, 0, "ÉLÈVES")
+        self.total_du_label = self.creer_carte_indicateur(metrics, 0, 1, "TOTAL DÛ")
+        self.total_paye_label = self.creer_carte_indicateur(metrics, 0, 2, "TOTAL PAYÉ")
+        self.total_reste_label = self.creer_carte_indicateur(metrics, 0, 3, "RESTE À PAYER")
+        content_layout.addLayout(metrics)
 
-        history_button = QPushButton("Historique des paiements")
-        history_button.clicked.connect(self.afficher_historique)
-        search_layout.addWidget(history_button)
+        table_heading = QHBoxLayout()
+        section_title = QLabel("Suivi des élèves")
+        section_title.setObjectName("sectionTitle")
+        table_heading.addWidget(section_title)
+        table_heading.addStretch()
+        content_layout.addLayout(table_heading)
 
-        print_button = QPushButton("Imprimer le reçu")
-        print_button.clicked.connect(self.imprimer_recu)
-        search_layout.addWidget(print_button)
-        
-        layout.addLayout(search_layout)
-
-        dashboard_layout = QHBoxLayout()
-        self.total_eleves_label = QLabel()
-        self.total_du_label = QLabel()
-        self.total_paye_label = QLabel()
-        self.total_reste_label = QLabel()
-        for label in (self.total_eleves_label, self.total_du_label, self.total_paye_label, self.total_reste_label):
-            dashboard_layout.addWidget(label)
-        layout.addLayout(dashboard_layout)
-        
-        # Tableau
         self.table = QTableWidget()
         self.table.setColumnCount(8)
         self.table.setHorizontalHeaderLabels(["ID", "Matricule", "Nom", "Prénom", "Classe", "Dû", "Payé", "Reste"])
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.table.setAlternatingRowColors(True)
+        self.table.verticalHeader().setVisible(False)
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.table.setColumnHidden(0, True)
         self.table.cellDoubleClicked.connect(lambda row, _column: self.generer_facture(row))
-        layout.addWidget(self.table)
+        content_layout.addWidget(self.table)
+
+        body_layout.addWidget(content, 1)
+        root_layout.addWidget(body, 1)
         
         self.setCentralWidget(main_widget)
+
+    def creer_bouton_menu(self, texte, action, checked=False):
+        button = QPushButton(texte)
+        button.setObjectName("navButton")
+        button.setCheckable(True)
+        button.setChecked(checked)
+        self.navigation_group.addButton(button)
+        button.clicked.connect(action)
+        return button
+
+    def creer_carte_indicateur(self, grid, row, column, titre):
+        card = QFrame()
+        card.setObjectName("metricCard")
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(16, 12, 16, 14)
+        card_layout.setSpacing(7)
+        title = QLabel(titre)
+        title.setObjectName("metricTitle")
+        value = QLabel("0")
+        value.setObjectName("metricValue")
+        card_layout.addWidget(title)
+        card_layout.addWidget(value)
+        grid.addWidget(card, row, column)
+        return value
+
+    def afficher_tous_les_eleves(self):
+        self.search_input.blockSignals(True)
+        self.class_filter.blockSignals(True)
+        self.status_filter.blockSignals(True)
+        self.search_input.clear()
+        self.class_filter.setCurrentIndex(0)
+        self.status_filter.setCurrentIndex(0)
+        self.search_input.blockSignals(False)
+        self.class_filter.blockSignals(False)
+        self.status_filter.blockSignals(False)
+        self.charger_donnees()
 
     def charger_donnees(self):
         eleves = EleveService.obtenir_liste_eleves_avec_solde()
         filtre = self.search_input.text().lower()
 
+        classe_selectionnee = self.class_filter.currentData()
+        classes = sorted({e["classe"] for e in eleves}, key=str.casefold)
+        if [self.class_filter.itemText(i) for i in range(1, self.class_filter.count())] != classes:
+            self.class_filter.blockSignals(True)
+            self.class_filter.clear()
+            self.class_filter.addItem("Toutes les classes", "")
+            for class_name in classes:
+                self.class_filter.addItem(class_name, class_name)
+            selected_index = self.class_filter.findData(classe_selectionnee)
+            self.class_filter.setCurrentIndex(max(0, selected_index))
+            self.class_filter.blockSignals(False)
+
+        classe_selectionnee = self.class_filter.currentData()
+        statut_selectionne = self.status_filter.currentData()
+
         total_du = sum(e["frais"] for e in eleves)
         total_paye = sum(e["paye"] for e in eleves)
-        self.total_eleves_label.setText(f"Élèves : {len(eleves)}")
-        self.total_du_label.setText(f"Total dû : {self.format_montant(total_du)}")
-        self.total_paye_label.setText(f"Total payé : {self.format_montant(total_paye)}")
-        self.total_reste_label.setText(f"Reste : {self.format_montant(total_du - total_paye)}")
+        self.total_eleves_label.setText(str(len(eleves)))
+        self.total_du_label.setText(self.format_montant(total_du))
+        self.total_paye_label.setText(self.format_montant(total_paye))
+        self.total_reste_label.setText(self.format_montant(total_du - total_paye))
         
         self.table.setRowCount(0)
         for e in eleves:
-            if filtre and filtre not in e["nom"].lower() and filtre not in e["prenom"].lower():
+            texte_eleve = f"{e['nom']} {e['prenom']} {e['matricule']}".lower()
+            if filtre and filtre not in texte_eleve:
+                continue
+            if classe_selectionnee and e["classe"] != classe_selectionnee:
+                continue
+            if statut_selectionne and e["statut"] != statut_selectionne:
                 continue
             row = self.table.rowCount()
             self.table.insertRow(row)
@@ -107,6 +285,56 @@ class MainWindow(QMainWindow):
             self.table.setItem(row, 5, QTableWidgetItem(self.format_montant(e["frais"])))
             self.table.setItem(row, 6, QTableWidgetItem(self.format_montant(e["paye"])))
             self.table.setItem(row, 7, QTableWidgetItem(self.format_montant(e["reste"])))
+
+    def sauvegarder_base(self):
+        default_path = os.path.join(
+            os.path.dirname(DB_PATH),
+            f"edupaie_sauvegarde_{datetime.now().strftime('%Y%m%d-%H%M%S')}.db",
+        )
+        destination, _ = QFileDialog.getSaveFileName(
+            self, "Sauvegarder la base EduPaie", default_path, "Base SQLite (*.db)"
+        )
+        if not destination:
+            return
+        if not destination.lower().endswith(".db"):
+            destination += ".db"
+        try:
+            saved_path = create_backup(destination)
+        except Exception as error:
+            QMessageBox.critical(self, "Sauvegarde impossible", str(error))
+            return
+        QMessageBox.information(self, "Sauvegarde terminée", f"Copie créée ici :\n{saved_path}")
+
+    def restaurer_base(self):
+        backup_path, _ = QFileDialog.getOpenFileName(
+            self, "Choisir une sauvegarde EduPaie", os.path.dirname(DB_PATH), "Base SQLite (*.db)"
+        )
+        if not backup_path:
+            return
+
+        answer = QMessageBox.question(
+            self,
+            "Confirmer la restauration",
+            "La restauration remplacera les données actuelles. Une copie de sécurité "
+            "de la base actuelle sera créée avant le remplacement. Continuer ?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+
+        try:
+            safety_path = restore_backup(backup_path)
+            init_db()
+            self.charger_donnees()
+        except Exception as error:
+            QMessageBox.critical(self, "Restauration impossible", str(error))
+            return
+        QMessageBox.information(
+            self,
+            "Restauration terminée",
+            f"La base a été restaurée. Copie de sécurité :\n{safety_path}",
+        )
 
     def generer_facture(self, row=None):
         if row is None:

@@ -40,6 +40,8 @@ class MainWindow(QMainWindow):
         QPushButton#primaryButton:pressed { background: #045333; }
         QPushButton#secondaryButton { background: #e9efeb; color: #33443a; border: 1px solid #dce5df; border-radius: 4px; padding: 8px 12px; }
         QPushButton#secondaryButton:hover { background: #dcebe2; color: #08784e; }
+        QPushButton#dangerButton { text-align: left; background: #fff1f0; color: #a52a22; border: 1px solid #f1d0cd; border-radius: 4px; padding: 9px 12px; font-weight: 600; }
+        QPushButton#dangerButton:hover { background: #ffe4e1; border-color: #e8b6b1; }
         QFrame#metricCard { background: white; border: 1px solid #e1e7e3; border-radius: 5px; }
         QLabel#metricTitle { color: #708078; font-size: 9pt; }
         QLabel#metricValue { color: #08784e; font-size: 15pt; font-weight: 700; }
@@ -127,6 +129,13 @@ class MainWindow(QMainWindow):
         sidebar_layout.addWidget(data_heading)
         sidebar_layout.addWidget(self.creer_bouton_menu("Sauvegarder", self.sauvegarder_base))
         sidebar_layout.addWidget(self.creer_bouton_menu("Restaurer", self.restaurer_base))
+        management_heading = QLabel("GESTION")
+        management_heading.setObjectName("sidebarHeading")
+        sidebar_layout.addWidget(management_heading)
+        delete_button = QPushButton("Supprimer l'élève")
+        delete_button.setObjectName("dangerButton")
+        delete_button.clicked.connect(self.supprimer_eleve)
+        sidebar_layout.addWidget(delete_button)
         sidebar_layout.addStretch()
         body_layout.addWidget(sidebar)
 
@@ -350,6 +359,33 @@ class MainWindow(QMainWindow):
             "Restauration terminée",
             f"La base a été restaurée. Copie de sécurité :\n{safety_path}",
         )
+
+    def supprimer_eleve(self):
+        eleve = self.obtenir_eleve_selectionne()
+        if eleve is None:
+            return
+
+        paiements = PaiementDAO.get_by_eleve(eleve[0])
+        confirmation = QMessageBox.warning(
+            self,
+            "Confirmer la suppression",
+            f"Supprimer définitivement {eleve[2]} {eleve[3]} ({eleve[1]}) ?\n\n"
+            f"Les {len(paiements)} paiement(s) et leur historique seront également supprimés. "
+            "Cette action est irréversible.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if confirmation != QMessageBox.StandardButton.Yes:
+            return
+
+        try:
+            EleveDAO.delete(eleve[0])
+        except Exception as error:
+            QMessageBox.critical(self, "Suppression impossible", str(error))
+            return
+
+        self.charger_donnees()
+        QMessageBox.information(self, "Élève supprimé", f"{eleve[2]} {eleve[3]} a été supprimé.")
 
     def generer_facture(self, row=None):
         if row is None:

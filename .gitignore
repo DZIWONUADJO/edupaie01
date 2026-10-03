@@ -1,18 +1,27 @@
+# Environnements Python créés localement.
 venv/
 .venv/
+
+# Fichiers temporaires produits par Python et les outils de vérification.
 __pycache__/
 *.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Bases SQLite locales et journaux temporaires associés.
 *.db
 *.db-wal
 *.db-shm
 *.db-journal
 *.sqlite
 *.sqlite3
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
+
+# Fichiers générés lors de la compilation ou de la création de l'exécutable.
 build/
 dist/
 *.spec
+
+# Documents de sortie et réglages locaux de l'éditeur.
 recus/*.pdf
 .vscode/

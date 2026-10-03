@@ -1,3 +1,5 @@
+"""Création et restauration sûres de fichiers de sauvegarde SQLite."""
+
 import os
 import sqlite3
 from datetime import datetime
@@ -6,6 +8,7 @@ from src.database import connection as database_connection
 
 
 def create_backup(destination_path):
+    """Copie la base active vers ``destination_path`` avec l'API SQLite dédiée."""
     destination_path = os.path.abspath(destination_path)
     database_path = os.path.abspath(database_connection.DB_PATH)
     if destination_path == database_path:
@@ -23,6 +26,11 @@ def create_backup(destination_path):
 
 
 def restore_backup(backup_path):
+    """Valide une sauvegarde, crée une copie de sécurité puis restaure la base.
+
+    Le fichier est vérifié avant de remplacer les données actives. La copie de
+    sécurité permet de revenir à l'état précédent si une restauration pose problème.
+    """
     backup_path = os.path.abspath(backup_path)
     database_path = os.path.abspath(database_connection.DB_PATH)
     if backup_path == database_path:

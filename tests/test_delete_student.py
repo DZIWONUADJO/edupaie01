@@ -1,3 +1,5 @@
+"""Vérifie l'action de suppression et sa confirmation dans l'interface Qt."""
+
 import os
 import tempfile
 import unittest
@@ -16,11 +18,15 @@ from src.main_window import MainWindow
 
 
 class DeleteStudentTestCase(unittest.TestCase):
+    """Prépare une fenêtre et une base temporaires pour chaque scénario."""
+
     @classmethod
     def setUpClass(cls):
+        """Crée une seule application Qt, partagée par les tests de cette classe."""
         cls.app = QApplication.instance() or QApplication([])
 
     def setUp(self):
+        """Crée un élève qui a déjà effectué un paiement."""
         self.temp_directory = tempfile.TemporaryDirectory()
         self.original_db_path = database_connection.DB_PATH
         database_connection.DB_PATH = str(Path(self.temp_directory.name) / "delete.db")
@@ -32,12 +38,14 @@ class DeleteStudentTestCase(unittest.TestCase):
         self.delete_button = self.window.findChild(QPushButton, "dangerButton")
 
     def tearDown(self):
+        """Ferme la fenêtre et supprime la base temporaire après le test."""
         self.window.close()
         del self.window
         database_connection.DB_PATH = self.original_db_path
         self.temp_directory.cleanup()
 
     def test_delete_button_requires_confirmation(self):
+        """Cliquer sur Non conserve l'élève et son paiement."""
         self.assertIsNotNone(self.delete_button)
         with patch.object(QMessageBox, "warning", return_value=QMessageBox.StandardButton.No):
             self.delete_button.click()
@@ -46,6 +54,7 @@ class DeleteStudentTestCase(unittest.TestCase):
         self.assertEqual(len(PaiementDAO.get_by_eleve(self.eleve_id)), 1)
 
     def test_confirmed_delete_removes_student_and_associated_payments(self):
+        """Cliquer sur Oui supprime l'élève et vérifie la suppression en cascade."""
         with patch.object(QMessageBox, "warning", return_value=QMessageBox.StandardButton.Yes), \
              patch.object(QMessageBox, "information"):
             self.delete_button.click()

@@ -1,3 +1,5 @@
+"""Fenêtre principale EduPaie et branchement des actions de l'interface."""
+
 import sys
 import os
 from decimal import Decimal
@@ -20,6 +22,9 @@ from src.services.eleve_service import EleveService
 from src.services.pdf_service import PDFService
 
 class MainWindow(QMainWindow):
+    """Construit le tableau de bord et relie les boutons aux services métier."""
+
+    # Cette feuille de style Qt (QSS) définit les couleurs et tailles des widgets.
     APP_STYLE = """
         QWidget#appRoot { background: #f1f3f2; color: #26332d; font-family: "Segoe UI"; font-size: 10pt; }
         QFrame#topBar { background: #08784e; }
@@ -64,21 +69,25 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def charger_polices_systeme():
+        """Charge Segoe UI depuis Windows pour afficher correctement le français."""
         for font_path in ("C:/Windows/Fonts/segoeui.ttf", "C:/Windows/Fonts/segoeuib.ttf"):
             if os.path.exists(font_path):
                 QFontDatabase.addApplicationFont(font_path)
 
     @staticmethod
     def format_montant(montant):
+        """Présente un nombre avec deux décimales et l'unité monétaire FCFA."""
         return f"{Decimal(str(montant)):,.2f} FCFA"
 
     def init_ui(self):
+        """Crée le bandeau, le menu, les filtres, les indicateurs et le tableau."""
         main_widget = QWidget()
         main_widget.setObjectName("appRoot")
         root_layout = QVBoxLayout(main_widget)
         root_layout.setContentsMargins(0, 0, 0, 0)
         root_layout.setSpacing(0)
 
+        # Bandeau supérieur : identité de l'application et titre du logiciel.
         top_bar = QFrame()
         top_bar.setObjectName("topBar")
         top_bar.setFixedHeight(62)
@@ -98,6 +107,7 @@ class MainWindow(QMainWindow):
         body_layout.setContentsMargins(0, 0, 0, 0)
         body_layout.setSpacing(0)
 
+        # Le menu latéral regroupe les commandes par thème.
         sidebar = QFrame()
         sidebar.setObjectName("sidebar")
         sidebar.setFixedWidth(205)
@@ -139,6 +149,7 @@ class MainWindow(QMainWindow):
         sidebar_layout.addStretch()
         body_layout.addWidget(sidebar)
 
+        # La zone centrale affiche les filtres et les informations de suivi.
         content = QWidget()
         content_layout = QVBoxLayout(content)
         content_layout.setContentsMargins(26, 22, 26, 24)
@@ -182,6 +193,7 @@ class MainWindow(QMainWindow):
         filter_row.addStretch()
         content_layout.addLayout(filter_row)
 
+        # Chaque carte reçoit sa valeur depuis charger_donnees().
         metrics = QGridLayout()
         metrics.setHorizontalSpacing(12)
         metrics.setVerticalSpacing(12)
@@ -198,6 +210,7 @@ class MainWindow(QMainWindow):
         table_heading.addStretch()
         content_layout.addLayout(table_heading)
 
+        # L'ID reste dans le tableau pour retrouver l'élève, mais n'est pas visible.
         self.table = QTableWidget()
         self.table.setColumnCount(9)
         self.table.setHorizontalHeaderLabels(["ID", "Matricule", "Nom", "Prénom", "Classe", "Dû", "Payé", "Reste", "Statut"])
@@ -217,6 +230,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(main_widget)
 
     def creer_bouton_menu(self, texte, action, checked=False):
+        """Crée un bouton du menu et relie son clic à une méthode de la fenêtre."""
         button = QPushButton(texte)
         button.setObjectName("navButton")
         button.setCheckable(True)
@@ -226,6 +240,7 @@ class MainWindow(QMainWindow):
         return button
 
     def creer_carte_indicateur(self, grid, row, column, titre):
+        """Ajoute une carte de statistique et retourne son étiquette de valeur."""
         card = QFrame()
         card.setObjectName("metricCard")
         card_layout = QVBoxLayout(card)
@@ -241,6 +256,7 @@ class MainWindow(QMainWindow):
         return value
 
     def afficher_tous_les_eleves(self):
+        """Efface les filtres pour revenir à la liste complète des élèves."""
         self.search_input.blockSignals(True)
         self.class_filter.blockSignals(True)
         self.status_filter.blockSignals(True)
@@ -253,9 +269,11 @@ class MainWindow(QMainWindow):
         self.charger_donnees()
 
     def charger_donnees(self):
+        """Rafraîchit les totaux et affiche les élèves qui correspondent aux filtres."""
         eleves = EleveService.obtenir_liste_eleves_avec_solde()
         filtre = self.search_input.text().lower()
 
+        # Les choix de classe disponibles sont construits depuis les élèves en base.
         classe_selectionnee = self.class_filter.currentData()
         classes = sorted({e["classe"] for e in eleves}, key=str.casefold)
         if [self.class_filter.itemText(i) for i in range(1, self.class_filter.count())] != classes:
@@ -271,6 +289,7 @@ class MainWindow(QMainWindow):
         classe_selectionnee = self.class_filter.currentData()
         statut_selectionne = self.status_filter.currentData()
 
+        # Les cartes restent des totaux généraux, même quand le tableau est filtré.
         total_du = sum(e["frais"] for e in eleves)
         total_paye = sum(e["paye"] for e in eleves)
         self.total_eleves_label.setText(str(len(eleves)))
@@ -280,6 +299,7 @@ class MainWindow(QMainWindow):
         
         self.table.setRowCount(0)
         for e in eleves:
+            # La recherche accepte le nom, le prénom ou le matricule.
             texte_eleve = f"{e['nom']} {e['prenom']} {e['matricule']}".lower()
             if filtre and filtre not in texte_eleve:
                 continue
@@ -311,6 +331,7 @@ class MainWindow(QMainWindow):
             self.table.setItem(row, 8, status_item)
 
     def sauvegarder_base(self):
+        """Demande un emplacement puis copie la base SQLite à cet endroit."""
         default_path = os.path.join(
             os.path.dirname(DB_PATH),
             f"edupaie_sauvegarde_{datetime.now().strftime('%Y%m%d-%H%M%S')}.db",
@@ -330,6 +351,7 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, "Sauvegarde terminée", f"Copie créée ici :\n{saved_path}")
 
     def restaurer_base(self):
+        """Confirme puis restaure une sauvegarde après vérification et copie de sécurité."""
         backup_path, _ = QFileDialog.getOpenFileName(
             self, "Choisir une sauvegarde EduPaie", os.path.dirname(DB_PATH), "Base SQLite (*.db)"
         )
@@ -361,6 +383,7 @@ class MainWindow(QMainWindow):
         )
 
     def supprimer_eleve(self):
+        """Demande confirmation puis supprime l'élève et ses paiements associés."""
         eleve = self.obtenir_eleve_selectionne()
         if eleve is None:
             return
@@ -388,6 +411,7 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, "Élève supprimé", f"{eleve[2]} {eleve[3]} a été supprimé.")
 
     def generer_facture(self, row=None):
+        """Génère une facture depuis la ligne sélectionnée ou double-cliquée."""
         if row is None:
             selected_rows = self.table.selectionModel().selectedRows()
             if not selected_rows:
@@ -417,6 +441,7 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, "Facture générée", f"La facture PDF a été créée ici :\n{filename}")
 
     def obtenir_eleve_selectionne(self):
+        """Retourne l'élève choisi dans le tableau, ou None si aucune ligne n'est sélectionnée."""
         selected_rows = self.table.selectionModel().selectedRows()
         if not selected_rows:
             QMessageBox.information(self, "Sélection nécessaire", "Sélectionnez une ligne élève.")
@@ -425,6 +450,7 @@ class MainWindow(QMainWindow):
         return next((item for item in EleveDAO.get_all() if item[0] == eleve_id), None)
 
     def afficher_historique(self):
+        """Ouvre une fenêtre qui liste les paiements de l'élève sélectionné."""
         eleve = self.obtenir_eleve_selectionne()
         if eleve is None:
             QMessageBox.warning(self, "Élève introuvable", "L'élève sélectionné n'existe plus.")
@@ -458,6 +484,7 @@ class MainWindow(QMainWindow):
         dialog.exec()
 
     def imprimer_recu(self):
+        """Ouvre le dialogue d'impression pour le dernier paiement de l'élève."""
         eleve = self.obtenir_eleve_selectionne()
         if eleve is None:
             QMessageBox.warning(self, "Élève introuvable", "L'élève sélectionné n'existe plus.")
@@ -493,6 +520,7 @@ class MainWindow(QMainWindow):
             painter.end()
 
     def ajouter_eleve(self):
+        """Affiche le formulaire et enregistre un élève si ses champs sont remplis."""
         dialog = QDialog(self)
         dialog.setWindowTitle("Ajouter un élève")
         form = QFormLayout(dialog)
@@ -531,6 +559,7 @@ class MainWindow(QMainWindow):
         self.charger_donnees()
 
     def ajouter_paiement(self):
+        """Affiche le formulaire de versement; le DAO contrôle le montant avant l'insertion."""
         eleves = EleveDAO.get_all()
         if not eleves:
             QMessageBox.information(self, "Aucun élève", "Ajoutez d'abord un élève avant d'enregistrer un paiement.")
@@ -577,6 +606,7 @@ class MainWindow(QMainWindow):
         self.charger_donnees()
 
 if __name__ == "__main__":
+    # Ce bloc ne s'exécute que lorsque ce fichier est lancé directement par Python.
     init_db()
     app = QApplication(sys.argv)
     window = MainWindow()

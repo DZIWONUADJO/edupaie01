@@ -1,3 +1,5 @@
+"""Vérifie la copie, la restauration et le rejet des sauvegardes invalides."""
+
 import sqlite3
 import tempfile
 import unittest
@@ -10,7 +12,10 @@ from src.database.eleve_dao import EleveDAO
 
 
 class BackupTestCase(unittest.TestCase):
+    """Chaque test utilise sa propre base temporaire pour isoler ses données."""
+
     def setUp(self):
+        """Prépare une petite base avec un élève de référence."""
         self.temp_directory = tempfile.TemporaryDirectory()
         self.original_db_path = database_connection.DB_PATH
         database_connection.DB_PATH = str(Path(self.temp_directory.name) / "edupaie.db")
@@ -18,10 +23,12 @@ class BackupTestCase(unittest.TestCase):
         EleveDAO.create("E001", "Alpha", "Test", "6e", 100000)
 
     def tearDown(self):
+        """Restaure le chemin SQLite original et supprime les fichiers temporaires."""
         database_connection.DB_PATH = self.original_db_path
         self.temp_directory.cleanup()
 
     def test_backup_then_restore_creates_safety_copy(self):
+        """La restauration retrouve les anciennes données et garde une copie avant restauration."""
         backup_path = Path(self.temp_directory.name) / "sauvegarde.db"
         create_backup(backup_path)
         EleveDAO.create("E002", "Beta", "Test", "5e", 90000)
@@ -37,6 +44,7 @@ class BackupTestCase(unittest.TestCase):
             database.close()
 
     def test_invalid_backup_is_rejected_without_changing_database(self):
+        """Un fichier qui n'est pas une base SQLite ne doit pas remplacer les données."""
         invalid_path = Path(self.temp_directory.name) / "not-a-database.db"
         invalid_path.write_text("not a SQLite database", encoding="utf-8")
 

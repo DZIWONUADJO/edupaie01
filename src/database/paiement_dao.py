@@ -1,11 +1,16 @@
 
+"""DAO : requêtes SQL et règles de validation des paiements scolaires."""
+
 from decimal import Decimal, InvalidOperation
 
 from src.database.connection import get_connection
 
 class PaiementDAO:
+    """Centralise les opérations sur ``paiements`` pour éviter le SQL dans l'UI."""
+
     @staticmethod
     def add_paiement(eleve_id, montant, date_p, mode_p):
+        """Enregistre un versement si l'élève existe et si le montant ne dépasse pas son solde."""
         try:
             montant_decimal = Decimal(str(montant))
         except (InvalidOperation, ValueError) as error:
@@ -15,6 +20,7 @@ class PaiementDAO:
 
         with get_connection() as conn:
             cursor = conn.cursor()
+            # Recalculer le solde juste avant l'insertion évite d'accepter un trop-perçu.
             cursor.execute("SELECT frais_scolarite FROM eleves WHERE id = ?", (eleve_id,))
             eleve = cursor.fetchone()
             if eleve is None:
@@ -32,6 +38,7 @@ class PaiementDAO:
 
     @staticmethod
     def get_total_paye_par_eleve(eleve_id):
+        """Additionne les versements d'un élève; renvoie 0 s'il n'en a aucun."""
         with get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT COALESCE(SUM(montant), 0) FROM paiements WHERE eleve_id = ?", (eleve_id,))
@@ -39,6 +46,7 @@ class PaiementDAO:
 
     @staticmethod
     def get_by_eleve(eleve_id):
+        """Retourne les paiements du plus récent au plus ancien."""
         with get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(

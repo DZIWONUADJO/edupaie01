@@ -382,6 +382,56 @@ class MainWindow(QMainWindow):
             f"La base a été restaurée. Copie de sécurité :\n{safety_path}",
         )
 
+    def modifier_eleve(self):
+        """Ouvre un formulaire prérempli et enregistre les modifications de l'élève."""
+        eleve = self.obtenir_eleve_selectionne()
+        if eleve is None:
+            return
+
+        # eleve = (id, matricule, nom, prenom, classe, frais_scolarite)
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Modifier un élève")
+        form = QFormLayout(dialog)
+
+        matricule_label = QLabel(eleve[1])
+        matricule_label.setObjectName("mutedText")
+        nom = QLineEdit(eleve[2])
+        prenom = QLineEdit(eleve[3])
+        classe = QLineEdit(eleve[4])
+        frais = QDoubleSpinBox()
+        frais.setRange(0, 1_000_000_000)
+        frais.setDecimals(2)
+        frais.setSuffix(" FCFA")
+        frais.setValue(float(eleve[5]))
+
+        form.addRow("Matricule :", matricule_label)
+        form.addRow("Nom :", nom)
+        form.addRow("Prénom :", prenom)
+        form.addRow("Classe :", classe)
+        form.addRow("Frais de scolarité :", frais)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        form.addRow(buttons)
+
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        values = [nom.text().strip(), prenom.text().strip(), classe.text().strip()]
+        if not all(values):
+            QMessageBox.warning(self, "Informations manquantes", "Le nom, prénom et classe sont obligatoires.")
+            return
+
+        try:
+            EleveDAO.update(eleve[0], values[0], values[1], values[2], frais.value())
+        except Exception as error:
+            QMessageBox.critical(self, "Modification impossible", f"L'élève n'a pas été modifié : {error}")
+            return
+
+        self.charger_donnees()
+        QMessageBox.information(self, "Élève modifié", f"{values[0]} {values[1]} a été mis à jour.")
+
     def supprimer_eleve(self):
         """Demande confirmation puis supprime l'élève et ses paiements associés."""
         eleve = self.obtenir_eleve_selectionne()

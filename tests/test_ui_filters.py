@@ -1,3 +1,5 @@
+"""Tests Qt du filtrage des élèves et de la sélection du menu latéral."""
+
 import os
 import tempfile
 import unittest
@@ -15,11 +17,15 @@ from src.main_window import MainWindow
 
 
 class DashboardFiltersTestCase(unittest.TestCase):
+    """Utilise une fenêtre Qt et une base de données isolées des données utilisateur."""
+
     @classmethod
     def setUpClass(cls):
+        """Démarre Qt une fois pour tous les tests de cette classe."""
         cls.app = QApplication.instance() or QApplication([])
 
     def setUp(self):
+        """Crée deux élèves afin de vérifier des classes et statuts différents."""
         self.temp_directory = tempfile.TemporaryDirectory()
         self.original_db_path = database_connection.DB_PATH
         database_connection.DB_PATH = str(Path(self.temp_directory.name) / "ui.db")
@@ -30,12 +36,14 @@ class DashboardFiltersTestCase(unittest.TestCase):
         self.window = MainWindow()
 
     def tearDown(self):
+        """Ferme la fenêtre et supprime la base temporaire."""
         self.window.close()
         del self.window
         database_connection.DB_PATH = self.original_db_path
         self.temp_directory.cleanup()
 
     def test_filters_by_class_and_payment_status(self):
+        """Chaque filtre réduit la liste aux élèves qui correspondent au choix."""
         self.assertEqual(self.window.table.rowCount(), 2)
 
         self.window.class_filter.setCurrentIndex(self.window.class_filter.findData("6e"))
@@ -48,6 +56,7 @@ class DashboardFiltersTestCase(unittest.TestCase):
         self.assertEqual(int(self.window.table.item(0, 0).text()), self.paying_student_id + 1)
 
     def test_navigation_buttons_are_exclusive(self):
+        """Un seul bouton de navigation peut rester sélectionné à la fois."""
         buttons = self.window.findChildren(QPushButton, "navButton")
         buttons[0].setChecked(True)
         buttons[1].setChecked(True)

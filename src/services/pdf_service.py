@@ -1,9 +1,14 @@
+"""Création des documents PDF remis aux familles (reçus et factures)."""
+
 import os
 from decimal import Decimal
 
 class PDFService:
+    """Génère les documents PDF à partir des données préparées par les services."""
+
     @staticmethod
     def generer_recu(eleve_nom, eleve_prenom, classe, montant, mode_p, recu_no="REC-2026-001"):
+        """Crée un reçu pour un versement et retourne le chemin du fichier."""
         from fpdf import FPDF
 
         base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -29,6 +34,7 @@ class PDFService:
 
     @staticmethod
     def generer_facture(matricule, eleve_nom, eleve_prenom, classe, total_du, total_paye, reste, dernier_paiement, facture_no):
+        """Crée une facture récapitulative, même si aucun paiement n'a été fait."""
         from fpdf import FPDF
 
         base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))

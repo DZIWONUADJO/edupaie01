@@ -1,16 +1,17 @@
-"""Fenêtre principale EduPaie et branchement des actions de l'interface."""
+# -*- coding: utf-8 -*-
+"""Fenetre principale EduPaie."""
 
 import sys
 import os
 from decimal import Decimal
 from datetime import datetime
-from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
-                             QHBoxLayout, QTableWidget, QTableWidgetItem, 
-                             QPushButton, QLineEdit, QLabel, QMessageBox,
-                             QDialog, QFormLayout, QComboBox, QDoubleSpinBox,
-                             QDateEdit, QDialogButtonBox, QAbstractItemView,
-                             QFrame, QGridLayout, QHeaderView, QButtonGroup,
-                             QFileDialog)
+from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
+                               QHBoxLayout, QTableWidget, QTableWidgetItem,
+                               QPushButton, QLineEdit, QLabel, QMessageBox,
+                               QDialog, QFormLayout, QComboBox, QDoubleSpinBox,
+                               QDateEdit, QDialogButtonBox, QAbstractItemView,
+                               QFrame, QGridLayout, QHeaderView, QButtonGroup,
+                               QFileDialog)
 from PySide6.QtCore import QDate, QRect, Qt
 from PySide6.QtGui import QPainter, QFont, QFontDatabase, QColor
 from PySide6.QtPrintSupport import QPrinter, QPrintDialog
@@ -21,10 +22,22 @@ from src.database.paiement_dao import PaiementDAO
 from src.services.eleve_service import EleveService
 from src.services.pdf_service import PDFService
 
-class MainWindow(QMainWindow):
-    """Construit le tableau de bord et relie les boutons aux services métier."""
+BTN_MODIFIER  = "Modifier l\u2019\u00e9l\u00e8ve"
+BTN_SUPPRIMER = "Supprimer l\u2019\u00e9l\u00e8ve"
+LBL_ELEVES    = "\u00c9L\u00c8VES"
+LBL_DU        = "TOTAL D\u00db"
+LBL_PAYE      = "TOTAL PAY\u00c9"
+LBL_RESTE     = "RESTE \u00c0 PAYER"
+LBL_SUIVI     = "Suivi des \u00e9l\u00e8ves"
+PLACEHOLDER   = "Rechercher un \u00e9l\u00e8ve..."
+TITRE_PAGE    = "Vue d\u2019ensemble"
+NOUVEAU_PAI   = "Nouveau paiement"
+TITRE_APP     = "EduPaie - Gestion des Frais Scolaires"
+SUBTITLE_APP  = "GESTION DES FRAIS SCOLAIRES"
 
-    # Cette feuille de style Qt (QSS) définit les couleurs et tailles des widgets.
+
+class MainWindow(QMainWindow):
+
     APP_STYLE = """
         QWidget#appRoot { background: #f1f3f2; color: #26332d; font-family: "Segoe UI"; font-size: 10pt; }
         QFrame#topBar { background: #08784e; }
@@ -60,7 +73,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.charger_polices_systeme()
-        self.setWindowTitle("EduPaie - Gestion des Frais Scolaires")
+        self.setWindowTitle(TITRE_APP)
         self.resize(1180, 720)
         self.setMinimumSize(900, 600)
         self.setStyleSheet(self.APP_STYLE)
@@ -69,25 +82,22 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def charger_polices_systeme():
-        """Charge Segoe UI depuis Windows pour afficher correctement le français."""
-        for font_path in ("C:/Windows/Fonts/segoeui.ttf", "C:/Windows/Fonts/segoeuib.ttf"):
-            if os.path.exists(font_path):
-                QFontDatabase.addApplicationFont(font_path)
+        for fp in ("C:/Windows/Fonts/segoeui.ttf", "C:/Windows/Fonts/segoeuib.ttf"):
+            if os.path.exists(fp):
+                QFontDatabase.addApplicationFont(fp)
 
     @staticmethod
     def format_montant(montant):
-        """Présente un nombre avec deux décimales et l'unité monétaire FCFA."""
         return f"{Decimal(str(montant)):,.2f} FCFA"
 
     def init_ui(self):
-        """Crée le bandeau, le menu, les filtres, les indicateurs et le tableau."""
         main_widget = QWidget()
         main_widget.setObjectName("appRoot")
         root_layout = QVBoxLayout(main_widget)
         root_layout.setContentsMargins(0, 0, 0, 0)
         root_layout.setSpacing(0)
 
-        # Bandeau supérieur : identité de l'application et titre du logiciel.
+        # --- Bandeau ---
         top_bar = QFrame()
         top_bar.setObjectName("topBar")
         top_bar.setFixedHeight(62)
@@ -97,7 +107,7 @@ class MainWindow(QMainWindow):
         brand.setObjectName("brand")
         top_layout.addWidget(brand)
         top_layout.addStretch()
-        subtitle = QLabel("GESTION DES FRAIS SCOLAIRES")
+        subtitle = QLabel(SUBTITLE_APP)
         subtitle.setObjectName("topBarSubtitle")
         top_layout.addWidget(subtitle)
         root_layout.addWidget(top_bar)
@@ -107,113 +117,113 @@ class MainWindow(QMainWindow):
         body_layout.setContentsMargins(0, 0, 0, 0)
         body_layout.setSpacing(0)
 
-        # Le menu latéral regroupe les commandes par thème.
+        # --- Sidebar ---
         sidebar = QFrame()
         sidebar.setObjectName("sidebar")
         sidebar.setFixedWidth(205)
-        sidebar_layout = QVBoxLayout(sidebar)
-        sidebar_layout.setContentsMargins(0, 16, 0, 16)
-        sidebar_layout.setSpacing(3)
+        sl = QVBoxLayout(sidebar)
+        sl.setContentsMargins(0, 16, 0, 16)
+        sl.setSpacing(3)
         self.navigation_group = QButtonGroup(self)
         self.navigation_group.setExclusive(True)
-        actions_heading = QLabel("ACTIONS")
-        actions_heading.setObjectName("sidebarHeading")
-        sidebar_layout.addWidget(actions_heading)
 
-        dashboard_button = self.creer_bouton_menu("Vue d'ensemble", self.afficher_tous_les_eleves, checked=True)
-        sidebar_layout.addWidget(dashboard_button)
-        sidebar_layout.addWidget(self.creer_bouton_menu("Nouvel élève", self.ajouter_eleve))
+        def heading(txt):
+            h = QLabel(txt)
+            h.setObjectName("sidebarHeading")
+            return h
 
-        payment_heading = QLabel("PAIEMENTS")
-        payment_heading.setObjectName("sidebarHeading")
-        sidebar_layout.addWidget(payment_heading)
-        sidebar_layout.addWidget(self.creer_bouton_menu("Historique paiements", self.afficher_historique))
-        sidebar_layout.addWidget(self.creer_bouton_menu("Imprimer reçu", self.imprimer_recu))
+        sl.addWidget(heading("ACTIONS"))
+        sl.addWidget(self.creer_bouton_menu("Vue d\u2019ensemble", self.afficher_tous_les_eleves, checked=True))
+        sl.addWidget(self.creer_bouton_menu("Nouvel \u00e9l\u00e8ve", self.ajouter_eleve))
 
-        documents_heading = QLabel("DOCUMENTS")
-        documents_heading.setObjectName("sidebarHeading")
-        sidebar_layout.addWidget(documents_heading)
-        sidebar_layout.addWidget(self.creer_bouton_menu("Facture PDF", self.generer_facture))
-        data_heading = QLabel("DONNÉES")
-        data_heading.setObjectName("sidebarHeading")
-        sidebar_layout.addWidget(data_heading)
-        sidebar_layout.addWidget(self.creer_bouton_menu("Sauvegarder", self.sauvegarder_base))
-        sidebar_layout.addWidget(self.creer_bouton_menu("Restaurer", self.restaurer_base))
-        management_heading = QLabel("GESTION")
-        management_heading.setObjectName("sidebarHeading")
-        sidebar_layout.addWidget(management_heading)
-        delete_button = QPushButton("Supprimer l'élève")
-        delete_button.setObjectName("dangerButton")
-        delete_button.clicked.connect(self.supprimer_eleve)
-        sidebar_layout.addWidget(delete_button)
-        sidebar_layout.addStretch()
+        sl.addWidget(heading("PAIEMENTS"))
+        sl.addWidget(self.creer_bouton_menu("Historique paiements", self.afficher_historique))
+        sl.addWidget(self.creer_bouton_menu("Imprimer re\u00e7u", self.imprimer_recu))
+
+        sl.addWidget(heading("DOCUMENTS"))
+        sl.addWidget(self.creer_bouton_menu("Facture PDF", self.generer_facture))
+
+        sl.addWidget(heading("DONN\u00c9ES"))
+        sl.addWidget(self.creer_bouton_menu("Sauvegarder", self.sauvegarder_base))
+        sl.addWidget(self.creer_bouton_menu("Restaurer", self.restaurer_base))
+
+        sl.addWidget(heading("GESTION"))
+        # ---- BOUTON MODIFIER ----
+        sl.addWidget(self.creer_bouton_menu(BTN_MODIFIER, self.modifier_eleve))
+        # ---- BOUTON SUPPRIMER ----
+        btn_del = QPushButton(BTN_SUPPRIMER)
+        btn_del.setObjectName("dangerButton")
+        btn_del.clicked.connect(self.supprimer_eleve)
+        sl.addWidget(btn_del)
+
+        sl.addStretch()
         body_layout.addWidget(sidebar)
 
-        # La zone centrale affiche les filtres et les informations de suivi.
+        # --- Zone centrale ---
         content = QWidget()
-        content_layout = QVBoxLayout(content)
-        content_layout.setContentsMargins(26, 22, 26, 24)
-        content_layout.setSpacing(16)
+        cl = QVBoxLayout(content)
+        cl.setContentsMargins(26, 22, 26, 24)
+        cl.setSpacing(16)
 
         title_row = QHBoxLayout()
-        title = QLabel("Vue d'ensemble")
+        title = QLabel(TITRE_PAGE)
         title.setObjectName("pageTitle")
         title_row.addWidget(title)
         title_row.addStretch()
-        new_payment_button = QPushButton("Nouveau paiement")
-        new_payment_button.setObjectName("primaryButton")
-        new_payment_button.clicked.connect(self.ajouter_paiement)
-        title_row.addWidget(new_payment_button)
-        content_layout.addLayout(title_row)
+        btn_paiement = QPushButton(NOUVEAU_PAI)
+        btn_paiement.setObjectName("primaryButton")
+        btn_paiement.clicked.connect(self.ajouter_paiement)
+        title_row.addWidget(btn_paiement)
+        cl.addLayout(title_row)
 
         filter_row = QHBoxLayout()
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Rechercher un élève...")
+        self.search_input.setPlaceholderText(PLACEHOLDER)
         self.search_input.setFixedWidth(250)
         self.search_input.textChanged.connect(self.charger_donnees)
         filter_row.addWidget(self.search_input)
-        class_label = QLabel("Classe")
-        class_label.setObjectName("mutedText")
-        filter_row.addWidget(class_label)
+        lbl_c = QLabel("Classe")
+        lbl_c.setObjectName("mutedText")
+        filter_row.addWidget(lbl_c)
         self.class_filter = QComboBox()
         self.class_filter.setFixedWidth(160)
         self.class_filter.addItem("Toutes les classes", "")
         self.class_filter.currentIndexChanged.connect(self.charger_donnees)
         filter_row.addWidget(self.class_filter)
-        status_label = QLabel("Statut")
-        status_label.setObjectName("mutedText")
-        filter_row.addWidget(status_label)
+        lbl_s = QLabel("Statut")
+        lbl_s.setObjectName("mutedText")
+        filter_row.addWidget(lbl_s)
         self.status_filter = QComboBox()
         self.status_filter.setFixedWidth(150)
         self.status_filter.addItem("Tous les statuts", "")
-        for status in ("En retard", "En cours", "Soldé", "Crédit"):
-            self.status_filter.addItem(status, status)
+        for s in ("En retard", "En cours", "Sold\u00e9", "Cr\u00e9dit"):
+            self.status_filter.addItem(s, s)
         self.status_filter.currentIndexChanged.connect(self.charger_donnees)
         filter_row.addWidget(self.status_filter)
         filter_row.addStretch()
-        content_layout.addLayout(filter_row)
+        cl.addLayout(filter_row)
 
-        # Chaque carte reçoit sa valeur depuis charger_donnees().
         metrics = QGridLayout()
         metrics.setHorizontalSpacing(12)
         metrics.setVerticalSpacing(12)
-        self.total_eleves_label = self.creer_carte_indicateur(metrics, 0, 0, "ÉLÈVES")
-        self.total_du_label = self.creer_carte_indicateur(metrics, 0, 1, "TOTAL DÛ")
-        self.total_paye_label = self.creer_carte_indicateur(metrics, 0, 2, "TOTAL PAYÉ")
-        self.total_reste_label = self.creer_carte_indicateur(metrics, 0, 3, "RESTE À PAYER")
-        content_layout.addLayout(metrics)
+        self.total_eleves_label = self.creer_carte_indicateur(metrics, 0, 0, LBL_ELEVES)
+        self.total_du_label     = self.creer_carte_indicateur(metrics, 0, 1, LBL_DU)
+        self.total_paye_label   = self.creer_carte_indicateur(metrics, 0, 2, LBL_PAYE)
+        self.total_reste_label  = self.creer_carte_indicateur(metrics, 0, 3, LBL_RESTE)
+        cl.addLayout(metrics)
 
-        table_heading = QHBoxLayout()
-        section_title = QLabel("Suivi des élèves")
-        section_title.setObjectName("sectionTitle")
-        table_heading.addWidget(section_title)
-        table_heading.addStretch()
-        content_layout.addLayout(table_heading)
+        th = QHBoxLayout()
+        st = QLabel(LBL_SUIVI)
+        st.setObjectName("sectionTitle")
+        th.addWidget(st)
+        th.addStretch()
+        cl.addLayout(th)
 
-        # L'ID reste dans le tableau pour retrouver l'élève, mais n'est pas visible.
         self.table = QTableWidget()
         self.table.setColumnCount(9)
-        self.table.setHorizontalHeaderLabels(["ID", "Matricule", "Nom", "Prénom", "Classe", "Dû", "Payé", "Reste", "Statut"])
+        self.table.setHorizontalHeaderLabels(
+            ["ID", "Matricule", "Nom", "Pr\u00e9nom", "Classe", "D\u00fb", "Pay\u00e9", "Reste", "Statut"]
+        )
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -221,91 +231,83 @@ class MainWindow(QMainWindow):
         self.table.verticalHeader().setVisible(False)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.setColumnHidden(0, True)
-        self.table.cellDoubleClicked.connect(lambda row, _column: self.generer_facture(row))
-        content_layout.addWidget(self.table)
+        self.table.cellDoubleClicked.connect(lambda row, _col: self.generer_facture(row))
+        cl.addWidget(self.table)
 
         body_layout.addWidget(content, 1)
         root_layout.addWidget(body, 1)
-        
         self.setCentralWidget(main_widget)
 
+    # ------------------------------------------------------------------
     def creer_bouton_menu(self, texte, action, checked=False):
-        """Crée un bouton du menu et relie son clic à une méthode de la fenêtre."""
-        button = QPushButton(texte)
-        button.setObjectName("navButton")
-        button.setCheckable(True)
-        button.setChecked(checked)
-        self.navigation_group.addButton(button)
-        button.clicked.connect(action)
-        return button
+        btn = QPushButton(texte)
+        btn.setObjectName("navButton")
+        btn.setCheckable(True)
+        btn.setChecked(checked)
+        self.navigation_group.addButton(btn)
+        btn.clicked.connect(action)
+        return btn
 
-    def creer_carte_indicateur(self, grid, row, column, titre):
-        """Ajoute une carte de statistique et retourne son étiquette de valeur."""
+    def creer_carte_indicateur(self, grid, row, col, titre):
         card = QFrame()
         card.setObjectName("metricCard")
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(16, 12, 16, 14)
-        card_layout.setSpacing(7)
-        title = QLabel(titre)
-        title.setObjectName("metricTitle")
-        value = QLabel("0")
-        value.setObjectName("metricValue")
-        card_layout.addWidget(title)
-        card_layout.addWidget(value)
-        grid.addWidget(card, row, column)
-        return value
+        lay = QVBoxLayout(card)
+        lay.setContentsMargins(16, 12, 16, 14)
+        lay.setSpacing(7)
+        t = QLabel(titre)
+        t.setObjectName("metricTitle")
+        v = QLabel("0")
+        v.setObjectName("metricValue")
+        lay.addWidget(t)
+        lay.addWidget(v)
+        grid.addWidget(card, row, col)
+        return v
 
+    # ------------------------------------------------------------------
     def afficher_tous_les_eleves(self):
-        """Efface les filtres pour revenir à la liste complète des élèves."""
-        self.search_input.blockSignals(True)
-        self.class_filter.blockSignals(True)
-        self.status_filter.blockSignals(True)
+        for w in (self.search_input, self.class_filter, self.status_filter):
+            w.blockSignals(True)
         self.search_input.clear()
         self.class_filter.setCurrentIndex(0)
         self.status_filter.setCurrentIndex(0)
-        self.search_input.blockSignals(False)
-        self.class_filter.blockSignals(False)
-        self.status_filter.blockSignals(False)
+        for w in (self.search_input, self.class_filter, self.status_filter):
+            w.blockSignals(False)
         self.charger_donnees()
 
     def charger_donnees(self):
-        """Rafraîchit les totaux et affiche les élèves qui correspondent aux filtres."""
         eleves = EleveService.obtenir_liste_eleves_avec_solde()
         filtre = self.search_input.text().lower()
 
-        # Les choix de classe disponibles sont construits depuis les élèves en base.
-        classe_selectionnee = self.class_filter.currentData()
+        classe_sel = self.class_filter.currentData()
         classes = sorted({e["classe"] for e in eleves}, key=str.casefold)
         if [self.class_filter.itemText(i) for i in range(1, self.class_filter.count())] != classes:
             self.class_filter.blockSignals(True)
             self.class_filter.clear()
             self.class_filter.addItem("Toutes les classes", "")
-            for class_name in classes:
-                self.class_filter.addItem(class_name, class_name)
-            selected_index = self.class_filter.findData(classe_selectionnee)
-            self.class_filter.setCurrentIndex(max(0, selected_index))
+            for c in classes:
+                self.class_filter.addItem(c, c)
+            idx = self.class_filter.findData(classe_sel)
+            self.class_filter.setCurrentIndex(max(0, idx))
             self.class_filter.blockSignals(False)
 
-        classe_selectionnee = self.class_filter.currentData()
-        statut_selectionne = self.status_filter.currentData()
+        classe_sel = self.class_filter.currentData()
+        statut_sel = self.status_filter.currentData()
 
-        # Les cartes restent des totaux généraux, même quand le tableau est filtré.
-        total_du = sum(e["frais"] for e in eleves)
-        total_paye = sum(e["paye"] for e in eleves)
+        total_du   = sum(e["frais"] for e in eleves)
+        total_paye = sum(e["paye"]  for e in eleves)
         self.total_eleves_label.setText(str(len(eleves)))
         self.total_du_label.setText(self.format_montant(total_du))
         self.total_paye_label.setText(self.format_montant(total_paye))
         self.total_reste_label.setText(self.format_montant(total_du - total_paye))
-        
+
         self.table.setRowCount(0)
         for e in eleves:
-            # La recherche accepte le nom, le prénom ou le matricule.
-            texte_eleve = f"{e['nom']} {e['prenom']} {e['matricule']}".lower()
-            if filtre and filtre not in texte_eleve:
+            texte = f"{e['nom']} {e['prenom']} {e['matricule']}".lower()
+            if filtre and filtre not in texte:
                 continue
-            if classe_selectionnee and e["classe"] != classe_selectionnee:
+            if classe_sel and e["classe"] != classe_sel:
                 continue
-            if statut_selectionne and e["statut"] != statut_selectionne:
+            if statut_sel and e["statut"] != statut_sel:
                 continue
             row = self.table.rowCount()
             self.table.insertRow(row)
@@ -317,346 +319,311 @@ class MainWindow(QMainWindow):
             self.table.setItem(row, 5, QTableWidgetItem(self.format_montant(e["frais"])))
             self.table.setItem(row, 6, QTableWidgetItem(self.format_montant(e["paye"])))
             self.table.setItem(row, 7, QTableWidgetItem(self.format_montant(e["reste"])))
-            status_item = QTableWidgetItem(e["statut"])
-            status_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            status_colors = {
+            si = QTableWidgetItem(e["statut"])
+            si.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            colors = {
                 "En retard": ("#8a5700", "#fff1d2"),
-                "En cours": ("#245b86", "#e8f2fa"),
-                "Soldé": ("#08784e", "#e5f3eb"),
-                "Crédit": ("#176c70", "#e4f3f2"),
+                "En cours":  ("#245b86", "#e8f2fa"),
+                "Sold\u00e9":  ("#08784e", "#e5f3eb"),
+                "Cr\u00e9dit": ("#176c70", "#e4f3f2"),
             }
-            foreground, background = status_colors.get(e["statut"], ("#53645b", "#f1f4f2"))
-            status_item.setForeground(QColor(foreground))
-            status_item.setBackground(QColor(background))
-            self.table.setItem(row, 8, status_item)
+            fg, bg = colors.get(e["statut"], ("#53645b", "#f1f4f2"))
+            si.setForeground(QColor(fg))
+            si.setBackground(QColor(bg))
+            self.table.setItem(row, 8, si)
 
-    def sauvegarder_base(self):
-        """Demande un emplacement puis copie la base SQLite à cet endroit."""
-        default_path = os.path.join(
-            os.path.dirname(DB_PATH),
-            f"edupaie_sauvegarde_{datetime.now().strftime('%Y%m%d-%H%M%S')}.db",
-        )
-        destination, _ = QFileDialog.getSaveFileName(
-            self, "Sauvegarder la base EduPaie", default_path, "Base SQLite (*.db)"
-        )
-        if not destination:
-            return
-        if not destination.lower().endswith(".db"):
-            destination += ".db"
-        try:
-            saved_path = create_backup(destination)
-        except Exception as error:
-            QMessageBox.critical(self, "Sauvegarde impossible", str(error))
-            return
-        QMessageBox.information(self, "Sauvegarde terminée", f"Copie créée ici :\n{saved_path}")
-
-    def restaurer_base(self):
-        """Confirme puis restaure une sauvegarde après vérification et copie de sécurité."""
-        backup_path, _ = QFileDialog.getOpenFileName(
-            self, "Choisir une sauvegarde EduPaie", os.path.dirname(DB_PATH), "Base SQLite (*.db)"
-        )
-        if not backup_path:
-            return
-
-        answer = QMessageBox.question(
-            self,
-            "Confirmer la restauration",
-            "La restauration remplacera les données actuelles. Une copie de sécurité "
-            "de la base actuelle sera créée avant le remplacement. Continuer ?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
-        if answer != QMessageBox.StandardButton.Yes:
-            return
-
-        try:
-            safety_path = restore_backup(backup_path)
-            init_db()
-            self.charger_donnees()
-        except Exception as error:
-            QMessageBox.critical(self, "Restauration impossible", str(error))
-            return
-        QMessageBox.information(
-            self,
-            "Restauration terminée",
-            f"La base a été restaurée. Copie de sécurité :\n{safety_path}",
-        )
-
+    # ------------------------------------------------------------------
     def modifier_eleve(self):
-        """Ouvre un formulaire prérempli et enregistre les modifications de l'élève."""
+        """Ouvre un formulaire prerempli et enregistre les modifications."""
         eleve = self.obtenir_eleve_selectionne()
         if eleve is None:
             return
-
         # eleve = (id, matricule, nom, prenom, classe, frais_scolarite)
         dialog = QDialog(self)
-        dialog.setWindowTitle("Modifier un élève")
+        dialog.setWindowTitle("Modifier un \u00e9l\u00e8ve")
         form = QFormLayout(dialog)
 
-        matricule_label = QLabel(eleve[1])
-        matricule_label.setObjectName("mutedText")
-        nom = QLineEdit(eleve[2])
+        lbl_mat = QLabel(eleve[1])
+        lbl_mat.setObjectName("mutedText")
+        nom    = QLineEdit(eleve[2])
         prenom = QLineEdit(eleve[3])
         classe = QLineEdit(eleve[4])
-        frais = QDoubleSpinBox()
+        frais  = QDoubleSpinBox()
         frais.setRange(0, 1_000_000_000)
         frais.setDecimals(2)
         frais.setSuffix(" FCFA")
         frais.setValue(float(eleve[5]))
 
-        form.addRow("Matricule :", matricule_label)
+        form.addRow("Matricule :", lbl_mat)
         form.addRow("Nom :", nom)
-        form.addRow("Prénom :", prenom)
+        form.addRow("Pr\u00e9nom :", prenom)
         form.addRow("Classe :", classe)
-        form.addRow("Frais de scolarité :", frais)
+        form.addRow("Frais de scolarit\u00e9 :", frais)
 
-        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
-        buttons.accepted.connect(dialog.accept)
-        buttons.rejected.connect(dialog.reject)
-        form.addRow(buttons)
+        btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
+        btns.accepted.connect(dialog.accept)
+        btns.rejected.connect(dialog.reject)
+        form.addRow(btns)
 
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
 
-        values = [nom.text().strip(), prenom.text().strip(), classe.text().strip()]
-        if not all(values):
-            QMessageBox.warning(self, "Informations manquantes", "Le nom, prénom et classe sont obligatoires.")
+        vals = [nom.text().strip(), prenom.text().strip(), classe.text().strip()]
+        if not all(vals):
+            QMessageBox.warning(self, "Champs manquants", "Nom, pr\u00e9nom et classe sont obligatoires.")
             return
-
         try:
-            EleveDAO.update(eleve[0], values[0], values[1], values[2], frais.value())
-        except Exception as error:
-            QMessageBox.critical(self, "Modification impossible", f"L'élève n'a pas été modifié : {error}")
+            EleveDAO.update(eleve[0], vals[0], vals[1], vals[2], frais.value())
+        except Exception as err:
+            QMessageBox.critical(self, "Modification impossible", str(err))
             return
-
         self.charger_donnees()
-        QMessageBox.information(self, "Élève modifié", f"{values[0]} {values[1]} a été mis à jour.")
+        QMessageBox.information(self, "\u00c9l\u00e8ve modifi\u00e9", f"{vals[0]} {vals[1]} a \u00e9t\u00e9 mis \u00e0 jour.")
 
+    # ------------------------------------------------------------------
     def supprimer_eleve(self):
-        """Demande confirmation puis supprime l'élève et ses paiements associés."""
         eleve = self.obtenir_eleve_selectionne()
         if eleve is None:
             return
-
         paiements = PaiementDAO.get_by_eleve(eleve[0])
-        confirmation = QMessageBox.warning(
-            self,
-            "Confirmer la suppression",
-            f"Supprimer définitivement {eleve[2]} {eleve[3]} ({eleve[1]}) ?\n\n"
-            f"Les {len(paiements)} paiement(s) et leur historique seront également supprimés. "
-            "Cette action est irréversible.",
+        rep = QMessageBox.warning(
+            self, "Confirmer la suppression",
+            f"Supprimer {eleve[2]} {eleve[3]} ({eleve[1]}) ?\n\n"
+            f"Les {len(paiements)} paiement(s) seront aussi supprim\u00e9s. Action irr\u00e9versible.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
-        if confirmation != QMessageBox.StandardButton.Yes:
+        if rep != QMessageBox.StandardButton.Yes:
             return
-
         try:
             EleveDAO.delete(eleve[0])
-        except Exception as error:
-            QMessageBox.critical(self, "Suppression impossible", str(error))
+        except Exception as err:
+            QMessageBox.critical(self, "Suppression impossible", str(err))
             return
-
         self.charger_donnees()
-        QMessageBox.information(self, "Élève supprimé", f"{eleve[2]} {eleve[3]} a été supprimé.")
+        QMessageBox.information(self, "\u00c9l\u00e8ve supprim\u00e9", f"{eleve[2]} {eleve[3]} a \u00e9t\u00e9 supprim\u00e9.")
 
+    # ------------------------------------------------------------------
     def generer_facture(self, row=None):
-        """Génère une facture depuis la ligne sélectionnée ou double-cliquée."""
         if row is None:
-            selected_rows = self.table.selectionModel().selectedRows()
-            if not selected_rows:
-                QMessageBox.information(self, "Sélection nécessaire", "Sélectionnez une ligne élève pour générer sa facture.")
+            rows = self.table.selectionModel().selectedRows()
+            if not rows:
+                QMessageBox.information(self, "S\u00e9lection n\u00e9cessaire", "S\u00e9lectionnez un \u00e9l\u00e8ve.")
                 return
-            row = selected_rows[0].row()
-
+            row = rows[0].row()
         eleve_id = int(self.table.item(row, 0).text())
-        donnees = next((item for item in EleveService.obtenir_liste_eleves_avec_solde() if item["id"] == eleve_id), None)
-        eleve = next((item for item in EleveDAO.get_all() if item[0] == eleve_id), None)
+        donnees  = next((e for e in EleveService.obtenir_liste_eleves_avec_solde() if e["id"] == eleve_id), None)
+        eleve    = next((e for e in EleveDAO.get_all() if e[0] == eleve_id), None)
         if eleve is None or donnees is None:
-            QMessageBox.warning(self, "Élève introuvable", "L'élève sélectionné n'existe plus.")
+            QMessageBox.warning(self, "Introuvable", "\u00c9l\u00e8ve introuvable.")
             return
-
-        paiements = PaiementDAO.get_by_eleve(eleve_id)
+        paiements        = PaiementDAO.get_by_eleve(eleve_id)
         dernier_paiement = paiements[0] if paiements else None
-        facture_no = f"FAC-{datetime.now().strftime('%Y%m%d-%H%M%S')}-{eleve_id:04d}"
+        facture_no       = f"FAC-{datetime.now().strftime('%Y%m%d-%H%M%S')}-{eleve_id:04d}"
         try:
             filename = PDFService.generer_facture(
                 eleve[1], eleve[2], eleve[3], eleve[4],
                 donnees["frais"], donnees["paye"], donnees["reste"],
-                dernier_paiement, facture_no
+                dernier_paiement, facture_no,
             )
-        except Exception as error:
-            QMessageBox.critical(self, "Génération impossible", f"Le reçu n'a pas été généré : {error}")
+        except Exception as err:
+            QMessageBox.critical(self, "Erreur PDF", str(err))
             return
-        QMessageBox.information(self, "Facture générée", f"La facture PDF a été créée ici :\n{filename}")
+        QMessageBox.information(self, "Facture g\u00e9n\u00e9r\u00e9e", f"Fichier cr\u00e9\u00e9 :\n{filename}")
 
+    # ------------------------------------------------------------------
     def obtenir_eleve_selectionne(self):
-        """Retourne l'élève choisi dans le tableau, ou None si aucune ligne n'est sélectionnée."""
-        selected_rows = self.table.selectionModel().selectedRows()
-        if not selected_rows:
-            QMessageBox.information(self, "Sélection nécessaire", "Sélectionnez une ligne élève.")
+        rows = self.table.selectionModel().selectedRows()
+        if not rows:
+            QMessageBox.information(self, "S\u00e9lection n\u00e9cessaire", "S\u00e9lectionnez un \u00e9l\u00e8ve.")
             return None
-        eleve_id = int(self.table.item(selected_rows[0].row(), 0).text())
-        return next((item for item in EleveDAO.get_all() if item[0] == eleve_id), None)
+        eleve_id = int(self.table.item(rows[0].row(), 0).text())
+        return next((e for e in EleveDAO.get_all() if e[0] == eleve_id), None)
 
+    # ------------------------------------------------------------------
     def afficher_historique(self):
-        """Ouvre une fenêtre qui liste les paiements de l'élève sélectionné."""
         eleve = self.obtenir_eleve_selectionne()
         if eleve is None:
-            QMessageBox.warning(self, "Élève introuvable", "L'élève sélectionné n'existe plus.")
             return
-
         paiements = PaiementDAO.get_by_eleve(eleve[0])
         dialog = QDialog(self)
         dialog.setWindowTitle(f"Historique - {eleve[2]} {eleve[3]}")
         dialog.resize(650, 350)
         layout = QVBoxLayout(dialog)
-        layout.addWidget(QLabel(f"Élève : {eleve[2]} {eleve[3]} | Matricule : {eleve[1]}"))
-
-        history_table = QTableWidget(0, 4)
-        history_table.setHorizontalHeaderLabels(["Date", "Montant", "Mode", "Référence"])
-        history_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        layout.addWidget(QLabel(f"\u00c9l\u00e8ve : {eleve[2]} {eleve[3]}  |  Matricule : {eleve[1]}"))
+        tbl = QTableWidget(0, 4)
+        tbl.setHorizontalHeaderLabels(["Date", "Montant", "Mode", "R\u00e9f\u00e9rence"])
+        tbl.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         total = Decimal("0")
-        for paiement_id, montant, date_paiement, mode_paiement in paiements:
-            row = history_table.rowCount()
-            history_table.insertRow(row)
-            history_table.setItem(row, 0, QTableWidgetItem(date_paiement))
-            history_table.setItem(row, 1, QTableWidgetItem(self.format_montant(montant)))
-            history_table.setItem(row, 2, QTableWidgetItem(mode_paiement))
-            history_table.setItem(row, 3, QTableWidgetItem(f"PAY-{paiement_id:04d}"))
+        for pid, montant, date_p, mode_p in paiements:
+            r = tbl.rowCount()
+            tbl.insertRow(r)
+            tbl.setItem(r, 0, QTableWidgetItem(date_p))
+            tbl.setItem(r, 1, QTableWidgetItem(self.format_montant(montant)))
+            tbl.setItem(r, 2, QTableWidgetItem(mode_p))
+            tbl.setItem(r, 3, QTableWidgetItem(f"PAY-{pid:04d}"))
             total += Decimal(str(montant))
-        layout.addWidget(history_table)
-        layout.addWidget(QLabel(f"Total payé : {self.format_montant(total)}"))
-        close_button = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
-        close_button.rejected.connect(dialog.reject)
-        close_button.accepted.connect(dialog.accept)
-        layout.addWidget(close_button)
+        layout.addWidget(tbl)
+        layout.addWidget(QLabel(f"Total pay\u00e9 : {self.format_montant(total)}"))
+        cb = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        cb.rejected.connect(dialog.reject)
+        cb.accepted.connect(dialog.accept)
+        layout.addWidget(cb)
         dialog.exec()
 
+    # ------------------------------------------------------------------
     def imprimer_recu(self):
-        """Ouvre le dialogue d'impression pour le dernier paiement de l'élève."""
         eleve = self.obtenir_eleve_selectionne()
         if eleve is None:
-            QMessageBox.warning(self, "Élève introuvable", "L'élève sélectionné n'existe plus.")
             return
         paiements = PaiementDAO.get_by_eleve(eleve[0])
         if not paiements:
-            QMessageBox.information(self, "Aucun paiement", "Cet élève n'a aucun reçu à imprimer.")
+            QMessageBox.information(self, "Aucun paiement", "Cet \u00e9l\u00e8ve n\u2019a aucun re\u00e7u.")
             return
-
-        paiement_id, montant, date_paiement, mode_paiement = paiements[0]
+        pid, montant, date_p, mode_p = paiements[0]
         printer = QPrinter(QPrinter.PrinterMode.HighResolution)
-        dialog = QPrintDialog(printer, self)
-        if dialog.exec() != QDialog.DialogCode.Accepted:
+        dlg = QPrintDialog(printer, self)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
             return
-
         painter = QPainter(printer)
         try:
             painter.setFont(QFont("Arial", 16, QFont.Weight.Bold))
-            painter.drawText(QRect(500, 500, 7000, 500), "REÇU DE PAIEMENT - EDUPAIE")
+            painter.drawText(QRect(500, 500, 7000, 500), "RECU DE PAIEMENT - EDUPAIE")
             painter.setFont(QFont("Arial", 11))
             lines = [
-                f"Référence : PAY-{paiement_id:04d}",
-                f"Élève : {eleve[2]} {eleve[3]}",
+                f"Reference : PAY-{pid:04d}",
+                f"Eleve : {eleve[2]} {eleve[3]}",
                 f"Matricule : {eleve[1]}",
                 f"Classe : {eleve[4]}",
-                f"Montant réglé : {self.format_montant(montant)}",
-                f"Date : {date_paiement}",
-                f"Mode de paiement : {mode_paiement}",
+                f"Montant : {self.format_montant(montant)}",
+                f"Date : {date_p}",
+                f"Mode : {mode_p}",
             ]
-            for index, line in enumerate(lines, start=2):
-                painter.drawText(700, 500 + index * 500, line)
+            for i, line in enumerate(lines, start=2):
+                painter.drawText(700, 500 + i * 500, line)
         finally:
             painter.end()
 
+    # ------------------------------------------------------------------
     def ajouter_eleve(self):
-        """Affiche le formulaire et enregistre un élève si ses champs sont remplis."""
         dialog = QDialog(self)
-        dialog.setWindowTitle("Ajouter un élève")
+        dialog.setWindowTitle("Ajouter un \u00e9l\u00e8ve")
         form = QFormLayout(dialog)
-
         matricule = QLineEdit()
-        nom = QLineEdit()
-        prenom = QLineEdit()
-        classe = QLineEdit()
-        frais = QDoubleSpinBox()
+        nom       = QLineEdit()
+        prenom    = QLineEdit()
+        classe    = QLineEdit()
+        frais     = QDoubleSpinBox()
         frais.setRange(0, 1_000_000_000)
         frais.setDecimals(2)
         frais.setSuffix(" FCFA")
-
         form.addRow("Matricule :", matricule)
         form.addRow("Nom :", nom)
-        form.addRow("Prénom :", prenom)
+        form.addRow("Pr\u00e9nom :", prenom)
         form.addRow("Classe :", classe)
-        form.addRow("Frais de scolarité :", frais)
-
-        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
-        buttons.accepted.connect(dialog.accept)
-        buttons.rejected.connect(dialog.reject)
-        form.addRow(buttons)
-
+        form.addRow("Frais de scolarit\u00e9 :", frais)
+        btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
+        btns.accepted.connect(dialog.accept)
+        btns.rejected.connect(dialog.reject)
+        form.addRow(btns)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
-        values = [matricule.text().strip(), nom.text().strip(), prenom.text().strip(), classe.text().strip()]
-        if not all(values):
-            QMessageBox.warning(self, "Informations manquantes", "Tous les champs de l'élève sont obligatoires.")
+        vals = [matricule.text().strip(), nom.text().strip(), prenom.text().strip(), classe.text().strip()]
+        if not all(vals):
+            QMessageBox.warning(self, "Champs manquants", "Tous les champs sont obligatoires.")
             return
         try:
-            EleveDAO.create(*values, frais.value())
-        except Exception as error:
-            QMessageBox.critical(self, "Ajout impossible", f"L'élève n'a pas été ajouté : {error}")
+            EleveDAO.create(*vals, frais.value())
+        except Exception as err:
+            QMessageBox.critical(self, "Ajout impossible", str(err))
             return
         self.charger_donnees()
 
+    # ------------------------------------------------------------------
     def ajouter_paiement(self):
-        """Affiche le formulaire de versement; le DAO contrôle le montant avant l'insertion."""
         eleves = EleveDAO.get_all()
         if not eleves:
-            QMessageBox.information(self, "Aucun élève", "Ajoutez d'abord un élève avant d'enregistrer un paiement.")
+            QMessageBox.information(self, "Aucun \u00e9l\u00e8ve", "Ajoutez d\u2019abord un \u00e9l\u00e8ve.")
             return
-
         dialog = QDialog(self)
         dialog.setWindowTitle("Enregistrer un paiement")
         form = QFormLayout(dialog)
-
-        eleve = QComboBox()
-        for item in eleves:
-            eleve.addItem(f"{item[1]} - {item[2]} {item[3]}", item[0])
+        cb_eleve = QComboBox()
+        for e in eleves:
+            cb_eleve.addItem(f"{e[1]} - {e[2]} {e[3]}", e[0])
         montant = QDoubleSpinBox()
         montant.setRange(0.01, 1_000_000_000)
         montant.setDecimals(2)
         montant.setSuffix(" FCFA")
-        date_paiement = QDateEdit(QDate.currentDate())
-        date_paiement.setCalendarPopup(True)
+        date_p = QDateEdit(QDate.currentDate())
+        date_p.setCalendarPopup(True)
         mode = QComboBox()
-        mode.addItems(["Espèces", "Virement", "Chèque", "Mobile Money"])
-
-        form.addRow("Élève :", eleve)
+        mode.addItems(["Esp\u00e8ces", "Virement", "Ch\u00e8que", "Mobile Money"])
+        form.addRow("\u00c9l\u00e8ve :", cb_eleve)
         form.addRow("Montant :", montant)
-        form.addRow("Date :", date_paiement)
+        form.addRow("Date :", date_p)
         form.addRow("Mode de paiement :", mode)
-
-        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
-        buttons.accepted.connect(dialog.accept)
-        buttons.rejected.connect(dialog.reject)
-        form.addRow(buttons)
-
+        btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
+        btns.accepted.connect(dialog.accept)
+        btns.rejected.connect(dialog.reject)
+        form.addRow(btns)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         try:
             PaiementDAO.add_paiement(
-                eleve.currentData(),
+                cb_eleve.currentData(),
                 montant.value(),
-                date_paiement.date().toString("yyyy-MM-dd"),
+                date_p.date().toString("yyyy-MM-dd"),
                 mode.currentText(),
             )
-        except Exception as error:
-            QMessageBox.critical(self, "Paiement impossible", f"Le paiement n'a pas été enregistré : {error}")
+        except Exception as err:
+            QMessageBox.critical(self, "Paiement impossible", str(err))
             return
         self.charger_donnees()
 
+    # ------------------------------------------------------------------
+    def sauvegarder_base(self):
+        default = os.path.join(
+            os.path.dirname(DB_PATH),
+            f"edupaie_sauvegarde_{datetime.now().strftime('%Y%m%d-%H%M%S')}.db",
+        )
+        dest, _ = QFileDialog.getSaveFileName(self, "Sauvegarder", default, "Base SQLite (*.db)")
+        if not dest:
+            return
+        if not dest.lower().endswith(".db"):
+            dest += ".db"
+        try:
+            path = create_backup(dest)
+        except Exception as err:
+            QMessageBox.critical(self, "Sauvegarde impossible", str(err))
+            return
+        QMessageBox.information(self, "Sauvegarde OK", f"Copie : {path}")
+
+    def restaurer_base(self):
+        src, _ = QFileDialog.getOpenFileName(
+            self, "Choisir une sauvegarde", os.path.dirname(DB_PATH), "Base SQLite (*.db)"
+        )
+        if not src:
+            return
+        rep = QMessageBox.question(
+            self, "Confirmer",
+            "La restauration remplacera les donn\u00e9es actuelles. Continuer ?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if rep != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            safety = restore_backup(src)
+            init_db()
+            self.charger_donnees()
+        except Exception as err:
+            QMessageBox.critical(self, "Restauration impossible", str(err))
+            return
+        QMessageBox.information(self, "Restauration OK", f"Copie de s\u00e9curit\u00e9 : {safety}")
+
+
 if __name__ == "__main__":
-    # Ce bloc ne s'exécute que lorsque ce fichier est lancé directement par Python.
     init_db()
     app = QApplication(sys.argv)
     window = MainWindow()
